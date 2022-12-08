@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "fjsp-env"
+version = "0.1.0"
+description = ""
+authors = ["hornstrandir <paul_busch@gmx.de>"]
+readme = "README.md"
+packages = [{include = "fjsp_env"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+numpy = "^1.23.5"
+gym = "0.21.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+fjsp_env = "fjsp_env.envs.fjsp_env"
