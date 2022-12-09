@@ -28,8 +28,8 @@ class FJSPEnv(gym.Env):
         self.max_time_jobs = 0
         self.nb_legal_actions = 0
         self.nb_machine_legal = 0
-        self.nb_activities_per_job = []
-        self.nb_operations_per_activity = []
+        self.nb_activities_per_job = None
+        self.nb_operations_per_activity = None
         # initial values for variables used for solving (to reinitialize when reset() is called)
         self.solution = None
         self.last_solution = None
@@ -62,15 +62,18 @@ class FJSPEnv(gym.Env):
                     self.instance_matrix = np.zeros((self.jobs, self.machines, self.machines), dtype=(int, 2))
                     # contains all the time to complete jobs
                     self.jobs_max_length = np.zeros(self.jobs, dtype=int)
+                    self.nb_activities_per_job = np.zeros(self.jobs, dtype=int)
+                    self.nb_operations_per_activity = np.zeros((self.jobs, self.machines), dtype=int)
                 else:
                     idx = 1
                     # start counting jobs at null
                     job_nb = line_count - 2
                     id_activity = 0
                     while idx < len(splitted_line):
-                        self.nb_activities_per_job = id_activity + 1
+                        # TODO: Improvement: would be better to set number of activities just once
+                        self.nb_activities_per_job[job_nb] = id_activity + 1 
                         number_operations = int(splitted_line[idx])
-                        self.nb_operations_per_activity[id_activity] = number_operations
+                        self.nb_operations_per_activity[job_nb][id_activity] = number_operations
                         max_time_activity = 0
                         for id_operation in range(1, number_operations+1):
                             machine, time = int(splitted_line[idx + 2 * id_operation - 1]), int(splitted_line[idx + 2 * id_operation])
@@ -81,7 +84,6 @@ class FJSPEnv(gym.Env):
                         self.max_time_op = max(self.max_time_op, max_time_activity)
                         id_activity += 1
                         idx += 1 + 2 * number_operations
-
                         self.sum_time_activities += max_time_activity
         self.max_time_jobs = np.amax(self.jobs_max_length)
         assert self.max_time_op > 0
@@ -89,9 +91,10 @@ class FJSPEnv(gym.Env):
         assert self.jobs > 0
         assert self.machines > 1, "We need at least 2 machines"
         assert self.instance_matrix is not None
-        
+    
 
-if __name__ == "__main__":
+
+def main():
     env = FJSPEnv(env_config=None)
     print(env.instance_matrix)
     print(env.jobs)
