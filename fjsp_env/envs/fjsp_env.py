@@ -180,6 +180,87 @@ class FJSPEnv(gym.Env):
         self.state = np.zeros((self.actions, 7), dtype=float)
         return self._get_current_state_representation()
 
+    def _check_no_op(self):
+        self.legal_actions[self.actions] = False
+        if (
+            len(self.next_time_step) > 0
+            and self.nb_machine_legal <= 3
+            and self.nb_legal_actions <= 4
+        ):
+            machine_next = set()
+            next_time_step = self.next_time_step[0]
+            max_horizon = self.current_time_step
+            max_horizon_machine = [
+                self.current_time_step + self.max_time_op for _ in range(self.machines)
+            ]
+            for operation in range(self.actions):
+                if self.legal_actions[operation]:
+                    id_job = operation // self.max_activities_jobs
+                    id_activity = self.todo_activity_job[id_job]
+                    id_operation = operation % id_job
+                    key = self._ids_to_key(id_job, id_activity, id_operation)
+                    machine_needed, time_needed = self.instance_map[key]
+                    end_job = self.current_time_step + time_needed
+                    if end_job < next_time_step:
+                        return
+                    max_horizon_machine[machine_needed] = min(
+                        max_horizon_machine[machine_needed], end_job
+                    )
+                    max_horizon = max(max_horizon, max_horizon_machine[machine_needed])
+            for operation in range(self.actions):
+                id_job = operation // self.max_activities_jobs
+                id_activity = self.todo_activity_job[id_job]
+                id_operation = operation % id_job
+                if not self.legal_actions[operation]:
+                    if (
+                        self.time_until_activity_finished_jobs[id_job] > 0
+                        and id_activity + 1 < self.machines
+                    ):
+                        time_step = id_activity + 1
+                        time_needed = (
+                            self.current_time_step
+                            + self.time_until_activity_finished_jobs[id_job]
+                        )
+                        #TODO: this is not working with timestep since we need a key for the HashMap 
+                        while (
+                            time_step < self.machines - 1 and max_horizon > time_needed
+                        ):
+                            machine_needed = self.instance_map[key][time_step][0]
+                            if (
+                                max_horizon_machine[machine_needed] > time_needed
+                                and self.machine_legal[machine_needed]
+                            ):
+                                machine_next.add(machine_needed)
+                                if len(machine_next) == self.nb_machine_legal:
+                                    self.legal_actions[self.jobs] = True
+                                    return
+                            time_needed += self.instance_map[time_step][1]
+                            time_step += 1
+                    elif (
+                        not self.action_illegal_no_op[job]
+                        and self.todo_time_step_job[job] < self.machines
+                    ):
+                        time_step = self.todo_time_step_job[job]
+                        machine_needed = self.instance_matrix[job][time_step][0]
+                        time_needed = (
+                            self.current_time_step
+                            + self.time_until_available_machine[machine_needed]
+                        )
+                        while (
+                            time_step < self.machines - 1 and max_horizon > time_needed
+                        ):
+                            machine_needed = self.instance_matrix[job][time_step][0]
+                            if (
+                                max_horizon_machine[machine_needed] > time_needed
+                                and self.machine_legal[machine_needed]
+                            ):
+                                machine_next.add(machine_needed)
+                                if len(machine_next) == self.nb_machine_legal:
+                                    self.legal_actions[self.jobs] = True
+                                    return
+                            time_needed += self.instance_matrix[job][time_step][1]
+                            time_step += 1
+                            
     def step(self, action: int):
         reward = 0.0
         if action == self.actions:
