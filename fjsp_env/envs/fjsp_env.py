@@ -397,7 +397,7 @@ class FJSPEnv(gym.Env):
                 self.idle_time_jobs_last_op[id_job] += difference
                 self.state[operation][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
                 self.state[operation][6] = self.total_idle_time_jobs[id_job] / self.sum_op
-        for machine in range(self.machines):
+        for machine in range(1, self.machines+1):
             if self.time_until_available_machine[machine] < difference:
                 empty = difference - self.time_until_available_machine[machine]
                 hole_planning += empty
