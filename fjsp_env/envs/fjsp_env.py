@@ -6,7 +6,7 @@ import numpy as np
 import datetime
 from pathlib import Path
 
-
+#TODO: check if illegal actions do have some heavy computations. If so: use: if legal_action(action): ...
 class FJSPEnv(gym.Env):
     """
     """
@@ -125,7 +125,10 @@ class FJSPEnv(gym.Env):
         )
     
     def _ids_to_key(self, id_job: int, id_activity : int, id_operation: int) -> str:
-        return str(id_job) + str(id_activity) + str(id_operation)
+        try:
+            return str(id_job) + str(id_activity) + str(id_operation)
+        except KeyError:
+            return None
 
     def _key_to_ids(self, key: str):
         """
@@ -181,6 +184,14 @@ class FJSPEnv(gym.Env):
         return self._get_current_state_representation()
 
     def _check_no_op(self):
+        """
+        Restrictions:
+        1. Disallow No-Op if: four or more machines with some allocatable job.
+        2. Disallow No-Op if: five or more allocatable jobs.
+        3. If we make a pause longer than D it would be better to 
+            allocate a job with duration D.
+        4. We do not wait for jobs that will be rejected by non-final.
+        """
         self.legal_actions[self.actions] = False
         if (
             len(self.next_time_step) > 0
@@ -343,21 +354,15 @@ class FJSPEnv(gym.Env):
         hole_planning = 0
         next_time_step_to_pick = self.next_time_step.pop(0)
         self.next_action.pop(0)
-        difference = next_time_step_to_pick - self.current_time_step
+        time_difference = next_time_step_to_pick - self.current_time_step
         self.current_time_step = next_time_step_to_pick
-        for operation in range(self.actions):
-            id_job = operation // self.max_activities_jobs
-            id_activity = self.todo_activity_job[id_job]
-            id_operation = operation % self.max_activities_jobs
-            key = self._ids_to_key(id_job, id_activity, id_operation)
+        for id_job in range(self.jobs):
             was_left_time = self.time_until_activity_finished_jobs[id_job]
             # This can only happen for one operation of the activity.
             if was_left_time > 0:
-                # Here we can ignore activities of the same jobs, as only one of them
-                # has was_left_time > 0.
-                performed_op_job = min(difference, was_left_time)
+                performed_op_job = min(time_difference, was_left_time)
                 self.time_until_activity_finished_jobs[id_job] = max(
-                    0, self.time_until_activity_finished_jobs[id_job] - difference
+                    0, self.time_until_activity_finished_jobs[id_job] - time_difference
                 )
                 self.state[id_job:id_job+self.max_alternatives][1] = (
                     self.time_until_activity_finished_jobs[id_job] / self.max_time_op
@@ -367,42 +372,46 @@ class FJSPEnv(gym.Env):
                     self.total_perform_op_time_jobs[id_job] / self.max_time_jobs
                 )
                 if self.time_until_activity_finished_jobs[id_job] == 0:
-                    self.total_idle_time_jobs[id_job] += difference - was_left_time
-                    self.state[operation][6] = self.total_idle_time_jobs[id_job] / self.sum_op
-                    self.idle_time_jobs_last_op[id_job] = difference - was_left_time
-                    self.state[operation][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
+                    self.total_idle_time_jobs[id_job] += time_difference - was_left_time
+                    self.state[id_job:id_job+self.max_alternatives][6] = self.total_idle_time_jobs[id_job] / self.sum_op
+                    self.idle_time_jobs_last_op[id_job] = time_difference - was_left_time
+                    self.state[id_job:id_job+self.max_alternatives][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
                     self.todo_activity_job[id_job] += 1
-                    self.state[operation][2] = self.todo_activity_job[id_job] / self.machines
-                    # TODO: job is done
-                    if self.todo_activity_job[id_job] <= self.last_activity_jobs[id_job]:
-                        key = self._key_to_ids(id_job, id_activity, id_operation)
-                        needed_machine, _ = self.instance_map[key]
-                        self.needed_machine_operation[operation] = needed_machine
-                        self.state[operation][4] = (
-                            max(
-                                0, self.time_until_available_machine[needed_machine] - difference,
+                    self.state[id_job:id_job+self.max_alternatives][2] = self.todo_activity_job[id_job] / self.machines
+                    # TODO: job is not done
+                    for id_operation in range(self.max_alternatives):
+                        operation = id_operation + id_job
+                        if self.todo_activity_job[id_job] <= self.last_activity_jobs[id_job]:
+                            key = self._key_to_ids(id_job, self.todo_activity_job[id_job], id_operation)
+                            if key is None:
+                                continue
+                            needed_machine, _ = self.instance_map[key]
+                            self.needed_machine_operation[operation] = needed_machine
+                            self.state[operation][4] = (
+                                max(
+                                    0, self.time_until_available_machine[needed_machine] - time_difference,
+                                )
+                                / self.max_time_op
                             )
-                            / self.max_time_op
-                        )
-                    else:
-                        self.needed_machine_operation[operation] = -1
-                        # this allow to have 1 is job is over (not 0 because, 0 strongly indicate that the job is a
-                        # good candidate)
-                        self.state[operation][4] = 1.0
-                        if self.legal_actions[operation]:
-                            self.legal_actions[operation] = False
-                            self.nb_legal_actions -= 1
+                        else:
+                            self.needed_machine_operation[operation] = -1
+                            # this allow to have 1 is job is over (not 0 because, 0 strongly indicate that the job is a
+                            # good candidate)
+                            self.state[operation][4] = 1.0
+                            if self.legal_actions[operation]:
+                                self.legal_actions[operation] = False
+                                self.nb_legal_actions -= 1
             elif self.todo_activity_job[id_job] <= self.last_activity_jobs[id_job]:
-                self.total_idle_time_jobs[id_job] += difference
-                self.idle_time_jobs_last_op[id_job] += difference
-                self.state[operation][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
-                self.state[operation][6] = self.total_idle_time_jobs[id_job] / self.sum_op
+                self.total_idle_time_jobs[id_job] += time_difference
+                self.idle_time_jobs_last_op[id_job] += time_difference
+                self.state[id_job:id_job+self.max_alternatives][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
+                self.state[id_job:id_job+self.max_alternatives][6] = self.total_idle_time_jobs[id_job] / self.sum_op
         for machine in range(1, self.machines+1):
-            if self.time_until_available_machine[machine] < difference:
-                empty = difference - self.time_until_available_machine[machine]
+            if self.time_until_available_machine[machine] < time_difference:
+                empty = time_difference - self.time_until_available_machine[machine]
                 hole_planning += empty
             self.time_until_available_machine[machine] = max(
-                0, self.time_until_available_machine[machine] - difference
+                0, self.time_until_available_machine[machine] - time_difference
             )
             if self.time_until_available_machine[machine] == 0:
                 # Set actions legal that need this machine.
