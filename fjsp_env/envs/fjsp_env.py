@@ -17,7 +17,7 @@ class FJSPEnv(gym.Env):
         if env_config is None:
             env_config = {
                 "instance_path": str(Path(__file__).parent.absolute())
-                + "/instances_preprocessed/Mk01.fjs"
+                + "/instances_preprocessed/MK01.fjs"
             }
         instance_path = env_config["instance_path"]
         self.sum_time_activities = 0 # used to scale observations
@@ -57,8 +57,6 @@ class FJSPEnv(gym.Env):
         # initial values for variables used for representation
         self.start_timestamp = datetime.datetime.now().timestamp()
         self.sum_op = 0
-
-
         with open(instance_path, 'r') as instance_file:
             for line_count, line in enumerate(instance_file):
                 splitted_line = line.split()
@@ -86,7 +84,7 @@ class FJSPEnv(gym.Env):
                             machine, time = int(splitted_line[idx + 2 * id_operation - 1]) - 1, int(splitted_line[idx + 2 * id_operation])
                             if time > max_time_activity:
                                 max_time_activity = time
-                            key = self._ids_to_key(job_nb, id_activity, id_operation)
+                            key = self._ids_to_key(job_nb, id_activity, id_operation-1)
                             self.instance_map[key] = machine, time
                         self.jobs_max_duration[job_nb] += max_time_activity
                         self.max_time_op = max(self.max_time_op, max_time_activity)
@@ -127,12 +125,14 @@ class FJSPEnv(gym.Env):
     def _ids_to_key(self, id_job: int, id_activity : int, id_operation: int) -> str:
         return str(id_job) + str(id_activity) + str(id_operation)
 
+#TODO: this gives errors for keys greater than 999
     def _key_to_ids(self, key: str):
         """
         Order of IDs
         ------------
         id_job, id_activity, id_operation
         """
+
         return int(key[0]), int(key[1]), int(key[2])
 
     def _get_id_operation(self, id_job, nb_operation):
@@ -150,7 +150,6 @@ class FJSPEnv(gym.Env):
     def get_legal_actions(self):
         return self.legal_actions
 
-#TODO: rename self.operations to self.operations
     def reset(self):
         self.current_time_step = 0
         self.next_time_step = list()
@@ -174,11 +173,12 @@ class FJSPEnv(gym.Env):
         self.machine_legal = np.zeros(self.machines, dtype=bool)
         for operation in range(self.operations):
             id_job = operation // self.max_alternatives
-            key = self._ids_to_key(id_job, 0, operation-id_job)
-            try: 
-                needed_machine = self.instance_map[key][0]
-            except KeyError:
+            id_operation = self._get_id_operation(id_job, operation)
+            key = self._ids_to_key(id_job, 0, id_operation)
+            operation_data = self.instance_map.get(key)
+            if operation_data is None:
                 continue
+            needed_machine = operation_data[0]
             self.needed_machine_operation[operation] = needed_machine
             if not self.machine_legal[needed_machine]:
                 self.machine_legal[needed_machine] = True
@@ -461,11 +461,12 @@ class FJSPEnv(gym.Env):
                     for id_operation in range(self.max_alternatives):
                         operation = id_operation + id_job
                         if self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
-                            key = self._key_to_ids(id_job, self.todo_activity_jobs[id_job], id_operation)
+                            key = self._ids_to_key(id_job, self.todo_activity_jobs[id_job], id_operation)
         # TODO: increase timestep for non existing activities
                             try:
                                 needed_machine, _ = self.instance_map[key]
                             except KeyError:
+                                self.needed_machine_operation[operation] = -1
                                 continue
                             self.needed_machine_operation[operation] = needed_machine
                             self.state[operation][4] = (
@@ -487,7 +488,7 @@ class FJSPEnv(gym.Env):
                 self.idle_time_jobs_last_op[id_job] += time_difference
                 self.state[id_job:id_job+self.max_alternatives][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
                 self.state[id_job:id_job+self.max_alternatives][6] = self.total_idle_time_jobs[id_job] / self.sum_op
-        for machine in range(1, self.machines+1):
+        for machine in range(0, self.machines):
             if self.time_until_available_machine[machine] < time_difference:
                 empty = time_difference - self.time_until_available_machine[machine]
                 hole_planning += empty
