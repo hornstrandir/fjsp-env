@@ -6,6 +6,9 @@ import numpy as np
 import datetime
 from pathlib import Path
 
+class IllegalActionError(Exception):
+    print("An illegal action has been choosen.")
+
 #TODO: check if illegal actions do have some heavy computations. If so: use: if legal_action(action): ...
 class FJSPEnv(gym.Env):
     """
@@ -214,15 +217,15 @@ class FJSPEnv(gym.Env):
                 if id_activity == (self.last_activity_jobs[id_job] - 1):
                     keys_final_operations.append(key_this_step)
                 else:
-                    try:
-                        time_needed_legal = self.instance_map[key_this_step][1]
-                    except KeyError:
+                    operation_data = self.instance_map.get(key_this_step)
+                    if operation_data is None:
                         continue
+                    time_needed_legal = operation_data[1]
                     key_next_step = self._ids_to_key(id_job, id_activity + 1, id_operation)
-                    try:
-                        machine_needed_nextstep = self.instance_map[key_next_step][0]
-                    except KeyError:
-                        continue   
+                    operation_data = self.instance_map.get(key_next_step)
+                    if operation_data is None:
+                        continue
+                    machine_needed_nextstep = operation_data[0]
                     if (
                         self.time_until_available_machine[machine_needed_nextstep] == 0
                     ):
@@ -231,10 +234,10 @@ class FJSPEnv(gym.Env):
             if len(non_final_operations) > 0:
                 for key in keys_final_operations:
                     operation = int(key[0]) + int(key[2])
-                    try:
-                        time_needed_legal = self.instance_map[key][1]
-                    except KeyError:
+                    operation_data = self.instance_map.get(key)
+                    if operation_data is None:
                         continue
+                    time_needed_legal = operation_data[1]
                     if time_needed_legal > min_non_final:
                         self.legal_actions[operation] = False
                         self.nb_legal_actions -= 1
@@ -268,10 +271,10 @@ class FJSPEnv(gym.Env):
                     id_activity = self.todo_activity_jobs[id_job]
                     id_operation = self._get_id_operation(id_job, operation)
                     key = self._ids_to_key(id_job, id_activity, id_operation)
-                    try:
-                        machine_needed, time_needed = self.instance_map[key]
-                    except KeyError:
+                    operation_data = self.instance_map.get(key)
+                    if operation_data is None:
                         continue
+                    machine_needed, time_needed = operation_data
                     end_job = self.current_time_step + time_needed
                     if end_job < next_time_step:
                         return
@@ -299,10 +302,11 @@ class FJSPEnv(gym.Env):
                         time_step < self.last_activity_jobs[id_job] - 1 and max_horizon > time_needed
                     ):
                         next_key = self._ids_to_key(id_operation, time_step, id_job)
-                        try: 
-                            machine_needed, duration_operation = self.instance_map[next_key]
-                        except KeyError:
+                        operation_data = self.instance_map.get(next_key)
+                        if operation_data is None:
                             time_step += 1
+                            continue
+                        machine_needed, duration_operation = operation_data
                         if (
                             max_horizon_machine[machine_needed] > time_needed
                             and self.machine_legal[machine_needed]
@@ -320,10 +324,10 @@ class FJSPEnv(gym.Env):
                 ):
                     time_step = self.todo_activity_jobs[id_job]
                     next_key = self._ids_to_key(id_job, time_step, id_operation)
-                    try:
-                        machine_needed = self.instance_map[key][time_step][0]
-                    except KeyError:
+                    operation_data = self.instance_map.get(next_key)
+                    if operation_data is None:
                         continue
+                    machine_needed = operation_data[0]
                     time_needed = (
                         self.current_time_step
                         + self.time_until_available_machine[machine_needed]
@@ -332,10 +336,11 @@ class FJSPEnv(gym.Env):
                         time_step < self.last_activity_jobs[id_job] - 1 and max_horizon > time_needed
                     ):
                         next_key = self._ids_to_key(id_operation, time_step, id_job)
-                        try:
-                            machine_needed, duration_operation = self.instance_map[next_key]
-                        except KeyError:
+                        operation_data = self.instance_map.get(next_key)
+                        if operation is None:
                             time_step += 1
+                            continue
+                        machine_needed = operation_data[0]
                         if (
                             max_horizon_machine[machine_needed] > time_needed
                             and self.machine_legal[machine_needed]
@@ -376,11 +381,10 @@ class FJSPEnv(gym.Env):
             id_operation = self._get_id_operation(id_job, action)
             key = self._ids_to_key(id_job, id_activity, id_operation)
             current_time_step_job = self.todo_activity_jobs[id_job]
-            try:
-                machine_needed, time_needed = self.instance_map[key]
-            except KeyError:
-                print(f"An illegal action was taken {action}. Since there is no value for the key {key} in the HashMap {self.instance_map.items()}")
-                return
+            operation_data = self.instance_map.get(key)
+            if operation_data is None:
+                raise IllegalActionError
+            machine_needed, time_needed = operation_data
             reward += time_needed
             self.time_until_available_machine[machine_needed] = time_needed
             self.time_until_activity_finished_jobs[id_job] = time_needed
@@ -463,11 +467,11 @@ class FJSPEnv(gym.Env):
                         if self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
                             key = self._ids_to_key(id_job, self.todo_activity_jobs[id_job], id_operation)
         # TODO: increase timestep for non existing activities
-                            try:
-                                needed_machine, _ = self.instance_map[key]
-                            except KeyError:
+                            operation_data = self.instance_map.get(key)
+                            if operation_data is None:
                                 self.needed_machine_operation[operation] = -1
                                 continue
+                            needed_machine = operation_data[0]
                             self.needed_machine_operation[operation] = needed_machine
                             self.state[operation][4] = (
                                 max(
