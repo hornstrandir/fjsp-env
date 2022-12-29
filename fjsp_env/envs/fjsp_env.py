@@ -6,8 +6,8 @@ import numpy as np
 import datetime
 from pathlib import Path
 
-class IllegalActionError(Exception):
-    print("An illegal action has been choosen.")
+#class IllegalActionError(Exception):
+#    print("An illegal action has been choosen.")
 
 #TODO: check if illegal actions do have some heavy computations. If so: use: if legal_action(action): ...
 class FJSPEnv(gym.Env):
@@ -152,7 +152,7 @@ class FJSPEnv(gym.Env):
 
     def get_legal_actions(self):
         return self.legal_actions
-
+# TODO: check why machine 0 is legal print machines needed of legal actions
     def reset(self):
         self.current_time_step = 0
         self.next_time_step = list()
@@ -382,8 +382,9 @@ class FJSPEnv(gym.Env):
             key = self._ids_to_key(id_job, id_activity, id_operation)
             current_time_step_job = self.todo_activity_jobs[id_job]
             operation_data = self.instance_map.get(key)
+            #TODO: erase if tests are ok
             if operation_data is None:
-                raise IllegalActionError
+                print("illegal action")
             machine_needed, time_needed = operation_data
             reward += time_needed
             self.time_until_available_machine[machine_needed] = time_needed
@@ -410,6 +411,15 @@ class FJSPEnv(gym.Env):
                 ):
                     self.legal_actions[operation] = False
                     self.nb_legal_actions -= 1
+                    #TODO: readability
+                    # Reduce number of machine legal if the only operation that needed this machine
+                    # is an alternative of the action that was choosen.
+                    needed_machine_other_legal_actions = [
+                        machine for op, machine in enumerate(self.needed_machine_operation) if (self.legal_actions[op] and op != operation)
+                        ]
+                    if not self.needed_machine_operation[operation] in needed_machine_other_legal_actions:
+                        self.machine_legal[self.needed_machine_operation[operation]] = False
+                        self.nb_machine_legal -= 1
             self.nb_machine_legal -= 1
             self.machine_legal[machine_needed] = False
             # TODO: check this in the original code. what is it for
@@ -447,21 +457,20 @@ class FJSPEnv(gym.Env):
                 self.time_until_activity_finished_jobs[id_job] = max(
                     0, self.time_until_activity_finished_jobs[id_job] - time_difference
                 )
-                self.state[id_job:id_job+self.max_alternatives][1] = (
+                self.state[id_job:id_job+self.max_alternatives, 1] = (
                     self.time_until_activity_finished_jobs[id_job] / self.max_time_op
                 )
                 self.total_perform_op_time_jobs[id_job] += performed_op_job
-                self.state[id_job:id_job+self.max_alternatives][3] = (
+                self.state[id_job:id_job+self.max_alternatives, 3] = (
                     self.total_perform_op_time_jobs[id_job] / self.max_time_jobs
                 )
                 if self.time_until_activity_finished_jobs[id_job] == 0:
                     self.total_idle_time_jobs[id_job] += time_difference - was_left_time
-                    self.state[id_job:id_job+self.max_alternatives][6] = self.total_idle_time_jobs[id_job] / self.sum_op
+                    self.state[id_job:id_job+self.max_alternatives, 6] = self.total_idle_time_jobs[id_job] / self.sum_op
                     self.idle_time_jobs_last_op[id_job] = time_difference - was_left_time
-                    self.state[id_job:id_job+self.max_alternatives][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
+                    self.state[id_job:id_job+self.max_alternatives, 5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
                     self.todo_activity_jobs[id_job] += 1
-                    self.state[id_job:id_job+self.max_alternatives][2] = self.todo_activity_jobs[id_job] / self.machines
-                    # TODO: job is not done
+                    self.state[id_job:id_job+self.max_alternatives, 2] = self.todo_activity_jobs[id_job] / self.machines
                     for id_operation in range(self.max_alternatives):
                         operation = id_operation + id_job
                         if self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
@@ -490,8 +499,8 @@ class FJSPEnv(gym.Env):
             elif self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
                 self.total_idle_time_jobs[id_job] += time_difference
                 self.idle_time_jobs_last_op[id_job] += time_difference
-                self.state[id_job:id_job+self.max_alternatives][5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
-                self.state[id_job:id_job+self.max_alternatives][6] = self.total_idle_time_jobs[id_job] / self.sum_op
+                self.state[id_job:id_job+self.max_alternatives, 5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
+                self.state[id_job:id_job+self.max_alternatives, 6] = self.total_idle_time_jobs[id_job] / self.sum_op
         for machine in range(0, self.machines):
             if self.time_until_available_machine[machine] < time_difference:
                 empty = time_difference - self.time_until_available_machine[machine]
