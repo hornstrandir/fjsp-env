@@ -384,7 +384,7 @@ class FJSPEnv(gym.Env):
         else:
             id_job = action // self.max_alternatives
             id_activity = self.todo_activity_jobs[id_job]
-            id_operation = operation - id_job * self.max_alternatives
+            id_operation = action - id_job * self.max_alternatives
             key = self._ids_to_key(id_job, id_activity, id_operation)
             current_time_step_job = self.todo_activity_jobs[id_job]
             operation_data = self.instance_map.get(key)
