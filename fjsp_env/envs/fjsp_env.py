@@ -394,12 +394,9 @@ class FJSPEnv(gym.Env):
             key = self._ids_to_key(id_job, id_activity, id_operation)
             current_time_step_job = self.todo_activity_jobs[id_job]
             operation_data = self.instance_map.get(key)
-            #TODO: erase if tests are ok
+            #TODO: delete if tests are ok
             if operation_data is None:
                 print(f"illegal action: {action}")
-                print(f"needed machine action: {self.needed_machine_operation[action]}")
-                print(f"key: {key}")
-                print(f"HashMap: {self.instance_map.items()}")
             machine_needed, time_needed = operation_data
             reward += time_needed
             self.time_until_available_machine[machine_needed] = time_needed
@@ -432,15 +429,12 @@ class FJSPEnv(gym.Env):
             # Reduce number of machine legal if the only operation that needed this machine
             # is an alternative of the action that has been choosen.
             # TODO: Move this to increase time step
-            for alternative in range(id_job, id_job+self.max_alternatives):
-                needed_machine = self.needed_machine_operation[alternative]
-                if (
-                    needed_machine not in self.needed_machine_operation[self.legal_actions[:-1]] 
-                    and self.machine_legal[needed_machine]
-                    and needed_machine != -1
-                    ):
-                        self.machine_legal[needed_machine] = False
-                        #self.nb_machine_legal -= 1
+            needed_machines = self.needed_machine_operation[self.legal_actions[:-1]]
+            for machine in range(self.machines):
+                if machine in needed_machines:
+                    self.machine_legal[machine] = True
+                else:
+                    self.machine_legal[machine] = False
             # TODO: check this in the original code. what is it for
             for operation in range(self.operations):
                 if self.illegal_actions[machine_needed][operation]:
@@ -484,7 +478,6 @@ class FJSPEnv(gym.Env):
                     self.total_perform_op_time_jobs[id_job] / self.max_time_jobs
                 )
                 if self.time_until_activity_finished_jobs[id_job] == 0:
-                    print(f"id job finished: {id_job}")
                     self.legal_jobs[id_job] = True
                     self.total_idle_time_jobs[id_job] += time_difference - was_left_time
                     self.state[id_job:id_job+self.max_alternatives, 6] = self.total_idle_time_jobs[id_job] / self.sum_op
@@ -503,8 +496,6 @@ class FJSPEnv(gym.Env):
                                     self.legal_actions[operation] = False
                                     #self.nb_legal_actions -= 1
                             else:
-                                print(f"data changed by operation nb: {operation}")
-                                print(f"needed machine of that operation: {operation_data[0]}")
                                 needed_machine = operation_data[0]
                                 self.needed_machine_operation[operation] = needed_machine
                                 self.state[operation][4] = (
