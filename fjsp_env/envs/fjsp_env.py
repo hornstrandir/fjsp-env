@@ -34,7 +34,7 @@ class FJSPEnv(gym.Env):
         self.max_time_op = 0
         self.max_time_jobs = 0
         self.nb_legal_actions = 0
-        self.nb_machine_legal = 0
+        #self.nb_machine_legal = 0
         self.nb_activities_per_job = None
         self.nb_operations_per_activity = None
         self.last_activity_jobs = None
@@ -57,6 +57,7 @@ class FJSPEnv(gym.Env):
         self.illegal_actions = None
         self.action_illegal_no_op = None
         self.machine_legal = None
+        self.legal_jobs = None
         # initial values for variables used for representation
         self.start_timestamp = datetime.datetime.now().timestamp()
         self.sum_op = 0
@@ -72,6 +73,7 @@ class FJSPEnv(gym.Env):
                     self.jobs_max_duration = np.zeros(self.jobs, dtype=int)
                     self.last_activity_jobs = np.zeros(self.jobs, dtype=int)
                     self.nb_operations_per_activity = np.zeros((self.jobs, self.machines), dtype=int)
+                    self.legal_jobs = np.ones(self.jobs, dtype=int)
                 else:
                     idx = 1
                     # start counting jobs at null
@@ -125,6 +127,10 @@ class FJSPEnv(gym.Env):
             }
         )
     
+    @property
+    def nb_machine_legal(self):
+        return self.machine_legal.sum()
+
     def _ids_to_key(self, id_job: int, id_activity : int, id_operation: int) -> str:
         return str(id_job) + str(id_activity) + str(id_operation)
 
@@ -152,16 +158,18 @@ class FJSPEnv(gym.Env):
 
     def get_legal_actions(self):
         return self.legal_actions
+
 # TODO: check why machine 0 is legal print machines needed of legal actions
     def reset(self):
         self.current_time_step = 0
         self.next_time_step = list()
         self.next_action = list()
         self.nb_legal_actions = self.operations
-        self.nb_machine_legal = 0
+        #self.nb_machine_legal = 0
         # represent all the legal actions
         self.legal_actions = np.ones(self.operations + 1, dtype=bool)
         self.legal_actions[self.operations] = False
+        self.legal_jobs = np.ones(self.jobs, dtype=int)
         # used to represent the solution
         self.solution = np.full((self.jobs, self.machines), -1, dtype=int)
         self.time_until_available_machine = np.zeros(self.machines, dtype=int)
@@ -185,7 +193,7 @@ class FJSPEnv(gym.Env):
             self.needed_machine_operation[operation] = needed_machine
             if not self.machine_legal[needed_machine]:
                 self.machine_legal[needed_machine] = True
-                self.nb_machine_legal += 1
+                #self.nb_machine_legal += 1
         for operation, machine in enumerate(self.needed_machine_operation):
             if machine == -1:
                 # This is just a placeholder. Thus this action must be illegal
@@ -241,6 +249,12 @@ class FJSPEnv(gym.Env):
                     if time_needed_legal > min_non_final:
                         self.legal_actions[operation] = False
                         self.nb_legal_actions -= 1
+            needed_machines = self.needed_machine_operation[self.legal_actions[:-1]]
+            for machine in range(self.machines):
+                if machine in needed_machines:
+                    self.machine_legal[machine] = True
+                else:
+                    self.machine_legal[machine] = False
 
     def _check_no_op(self):
         """
@@ -323,8 +337,8 @@ class FJSPEnv(gym.Env):
                     and id_activity < self.last_activity_jobs[id_job]
                 ):
                     time_step = self.todo_activity_jobs[id_job]
-                    next_key = self._ids_to_key(id_job, time_step, id_operation)
-                    operation_data = self.instance_map.get(next_key)
+                    key_next_timestep = self._ids_to_key(id_job, time_step, id_operation)
+                    operation_data = self.instance_map.get(key_next_timestep)
                     if operation_data is None:
                         continue
                     machine_needed = operation_data[0]
@@ -335,12 +349,12 @@ class FJSPEnv(gym.Env):
                     while (
                         time_step < self.last_activity_jobs[id_job] - 1 and max_horizon > time_needed
                     ):
-                        next_key = self._ids_to_key(id_operation, time_step, id_job)
-                        operation_data = self.instance_map.get(next_key)
+                        key_next_timestep = self._ids_to_key(id_operation, time_step, id_job)
+                        operation_data = self.instance_map.get(key_next_timestep)
                         if operation is None:
                             time_step += 1
                             continue
-                        machine_needed = operation_data[0]
+                        machine_needed, duration_operation = operation_data
                         if (
                             max_horizon_machine[machine_needed] > time_needed
                             and self.machine_legal[machine_needed]
@@ -355,7 +369,7 @@ class FJSPEnv(gym.Env):
     def step(self, action: int):
         reward = 0.0
         if action == self.operations:
-            self.nb_machine_legal = 0
+            #self.nb_machine_legal = 0
             self.nb_legal_actions = 0
             for operation in range(self.operations):
                 if self.legal_actions[operation]:
@@ -367,8 +381,8 @@ class FJSPEnv(gym.Env):
             while self.nb_machine_legal == 0:
                 reward -= self.increase_time_step()
             scaled_reward = self._reward_scaler(reward)
-            #self._prioritization_non_final()
-            #self._check_no_op()
+            self._prioritization_non_final()
+            self._check_no_op()
             return (
                 self._get_current_state_representation(),
                 scaled_reward,
@@ -384,7 +398,10 @@ class FJSPEnv(gym.Env):
             operation_data = self.instance_map.get(key)
             #TODO: erase if tests are ok
             if operation_data is None:
-                print("illegal action")
+                print(f"illegal action: {action}")
+                print(f"needed machine action: {self.needed_machine_operation[action]}")
+                print(f"key: {key}")
+                print(f"HashMap: {self.instance_map.items()}")
             machine_needed, time_needed = operation_data
             reward += time_needed
             self.time_until_available_machine[machine_needed] = time_needed
@@ -397,6 +414,8 @@ class FJSPEnv(gym.Env):
                 self.next_time_step.insert(index, to_add_time_step)
                 self.next_action.insert(index, action)
             self.solution[id_job][current_time_step_job] = self.current_time_step
+            #self.nb_machine_legal -= 1
+            self.legal_jobs[id_job] = False
             for operation in range(self.operations):
                 if (
                     self.needed_machine_operation[operation] == machine_needed
@@ -411,17 +430,19 @@ class FJSPEnv(gym.Env):
                 ):
                     self.legal_actions[operation] = False
                     self.nb_legal_actions -= 1
-                    #TODO: readability
-                    # Reduce number of machine legal if the only operation that needed this machine
-                    # is an alternative of the action that was choosen.
-                    needed_machine_other_legal_actions = [
-                        machine for op, machine in enumerate(self.needed_machine_operation) if (self.legal_actions[op] and op != operation)
-                        ]
-                    if not self.needed_machine_operation[operation] in needed_machine_other_legal_actions:
-                        self.machine_legal[self.needed_machine_operation[operation]] = False
-                        self.nb_machine_legal -= 1
-            self.nb_machine_legal -= 1
+            
             self.machine_legal[machine_needed] = False
+
+            # Reduce number of machine legal if the only operation that needed this machine
+            # is an alternative of the action that has been choosen.
+            for alternative in range(id_job, id_job+self.max_alternatives + 1):
+                needed_machine = self.needed_machine_operation[alternative]
+                if (
+                    needed_machine not in self.needed_machine_operation[self.legal_actions[:-1]] 
+                    and self.machine_legal[needed_machine]
+                    ):
+                        self.machine_legal[needed_machine] = False
+                        #self.nb_machine_legal -= 1
             # TODO: check this in the original code. what is it for
             for operation in range(self.operations):
                 if self.illegal_actions[machine_needed][operation]:
@@ -429,8 +450,8 @@ class FJSPEnv(gym.Env):
             # if we can't allocate new job in the current timestep, we pass to the next one
             while self.nb_machine_legal == 0 and len(self.next_time_step) > 0:
                 reward -= self.increase_time_step()
-            #self._prioritization_non_final()
-            #self._check_no_op()
+            self._prioritization_non_final()
+            self._check_no_op()
             # we then need to scale the reward
             scaled_reward = self._reward_scaler(reward)
             return (
@@ -515,12 +536,13 @@ class FJSPEnv(gym.Env):
                         self.needed_machine_operation[operation] == machine
                         and not self.legal_actions[operation]
                         and not self.illegal_actions[machine][operation]
+                        and self.legal_jobs[operation // self.max_alternatives]
                     ):
                         self.legal_actions[operation] = True
                         self.nb_legal_actions += 1
                         if not self.machine_legal[machine]:
                             self.machine_legal[machine] = True
-                            self.nb_machine_legal += 1
+                            #self.nb_machine_legal += 1
         return hole_planning
     
     def _is_done(self):
