@@ -6,8 +6,8 @@ import numpy as np
 import datetime
 from pathlib import Path
 
-#class IllegalActionError(Exception):
-#    print("An illegal action has been choosen.")
+class IllegalActionError(Exception):
+    pass
 
 #TODO: check if illegal actions do have some heavy computations. If so: use: if legal_action(action): ...
 class FJSPEnv(gym.Env):
@@ -81,7 +81,7 @@ class FJSPEnv(gym.Env):
                     id_activity = 0
                     while idx < len(splitted_line):
                         # TODO: Improvement: would be better to set number of activities just once
-                        self.last_activity_jobs[job_nb] = id_activity + 1 
+                        self.last_activity_jobs[job_nb] = id_activity
                         number_operations = int(splitted_line[idx])
                         self.nb_operations_per_activity[job_nb][id_activity] = number_operations
                         max_time_activity = 0
@@ -219,7 +219,7 @@ class FJSPEnv(gym.Env):
                 id_operation = operation - id_job * self.max_alternatives
                 key_this_step = self._ids_to_key(id_job, id_activity, id_operation)
                 # TODO: check if it is possible if this can be called on the really last activity not the penultimate activity
-                if id_activity == (self.last_activity_jobs[id_job] - 1):
+                if id_activity == (self.last_activity_jobs[id_job]): # - 1
                     keys_final_operations.append(key_this_step)
                     final_operations.append(operation)
                 else:
@@ -397,6 +397,7 @@ class FJSPEnv(gym.Env):
             #TODO: delete if tests are ok
             if operation_data is None:
                 print(f"illegal action: {action}")
+                raise IllegalActionError
             machine_needed, time_needed = operation_data
             reward += time_needed
             self.time_until_available_machine[machine_needed] = time_needed
@@ -517,6 +518,14 @@ class FJSPEnv(gym.Env):
                 self.idle_time_jobs_last_op[id_job] += time_difference
                 self.state[id_job:id_job+self.max_alternatives, 5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
                 self.state[id_job:id_job+self.max_alternatives, 6] = self.total_idle_time_jobs[id_job] / self.sum_op
+        
+        needed_machines = self.needed_machine_operation[self.legal_actions[:-1]]
+        for machine in range(self.machines):
+            if machine in needed_machines:
+                self.machine_legal[machine] = True
+            else:
+                self.machine_legal[machine] = False
+
         for machine in range(self.machines):
             if self.time_until_available_machine[machine] < time_difference:
                 empty = time_difference - self.time_until_available_machine[machine]
@@ -527,11 +536,13 @@ class FJSPEnv(gym.Env):
             if self.time_until_available_machine[machine] == 0:
                 # Set actions legal that need this machine.
                 for operation in range(self.operations):
+                    id_job = operation // self.max_alternatives
                     if (
                         self.needed_machine_operation[operation] == machine
                         and not self.legal_actions[operation]
                         and not self.illegal_actions[machine][operation]
                         and self.legal_jobs[operation // self.max_alternatives]
+                        and self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]
                     ):
                         self.legal_actions[operation] = True
                         #self.nb_legal_actions += 1
