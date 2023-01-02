@@ -47,7 +47,7 @@ class FJSPEnv(gym.Env):
         self.next_action = list()
         self.legal_actions = None
         self.time_until_available_machine = None
-        self.time_until_activity_finished = None # changed from op to activity
+        self.time_until_activity_finished_jobs = None 
         self.todo_activity_jobs = None
         self.total_perform_op_time_jobs = None
         self.needed_machine_operation = None
@@ -103,7 +103,7 @@ class FJSPEnv(gym.Env):
         assert self.jobs > 0
         assert self.machines > 1, "We need at least 2 machines"
         assert self.instance_map is not None
-        self.action_space = gym.spaces.Discrete(self.jobs + 1)
+        self.action_space = gym.spaces.Discrete(self.operations + 1)
         # used for plotting
         self.colors = [
             tuple([random.random() for _ in range(3)]) for _ in range(self.machines)
@@ -122,7 +122,7 @@ class FJSPEnv(gym.Env):
             {
                 "action_mask": gym.spaces.Box(0, 1, shape=(self.jobs + 1,)),
                 "real_obs": gym.spaces.Box(
-                    low=0.0, high=1.0, shape=(self.jobs, 7), dtype=float
+                    low=0.0, high=1.0, shape=(self.operations, 7), dtype=float
                 ),
             }
         )
@@ -531,7 +531,7 @@ class FJSPEnv(gym.Env):
                         self.needed_machine_operation[operation] == machine
                         and not self.legal_actions[operation]
                         and not self.illegal_actions[machine][operation]
-                        and self.legal_jobs[operation // self.max_alternatives]
+                        and self.legal_jobs[id_job]
                         and self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]
                     ):
                         self.legal_actions[operation] = True
