@@ -293,7 +293,7 @@ class FJSPEnv(gym.Env):
                 id_operation = operation - id_job * self.max_alternatives
                 if (
                     self.time_until_activity_finished_jobs[id_job] > 0
-                    and id_activity + 1 < self.last_activity_jobs[id_job]
+                    and id_activity < self.last_activity_jobs[id_job]
                 ):
                     time_step = id_activity + 1
                     time_needed = (
@@ -322,7 +322,7 @@ class FJSPEnv(gym.Env):
                         time_step += 1
                 elif (
                     not self.action_illegal_no_op[operation]
-                    and id_activity < self.last_activity_jobs[id_job]
+                    and id_activity <= self.last_activity_jobs[id_job]
                 ):
                     time_step = self.todo_activity_jobs[id_job]
                     key_next_timestep = self._ids_to_key(id_job, time_step, id_operation)
@@ -335,7 +335,7 @@ class FJSPEnv(gym.Env):
                         + self.time_until_available_machine[machine_needed]
                     )
                     while (
-                        time_step < self.last_activity_jobs[id_job] - 1 and max_horizon > time_needed
+                        time_step < self.last_activity_jobs[id_job] and max_horizon > time_needed
                     ):
                         key_next_timestep = self._ids_to_key(id_operation, time_step, id_job)
                         operation_data = self.instance_map.get(key_next_timestep)
