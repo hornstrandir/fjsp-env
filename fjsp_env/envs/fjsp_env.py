@@ -36,7 +36,7 @@ class FJSPEnv(gym.Env):
         #self.nb_legal_actions = 0
         #self.nb_machine_legal = 0
         self.nb_activities_per_job = None
-        self.nb_operations_per_activity = None
+        #self.nb_operations_per_activity = None
         self.last_activity_jobs = None
         # initial values for variables used for solving (to reinitialize when reset() is called)
         self.solution = None
@@ -64,6 +64,8 @@ class FJSPEnv(gym.Env):
         with open(instance_path, 'r') as instance_file:
             for line_count, line in enumerate(instance_file):
                 splitted_line = line.split()
+                if len(splitted_line) == 0:
+                    break
                 if line_count == 0:
                     self.jobs = int(splitted_line[0])
                     self.machines = int(splitted_line[1])
@@ -72,18 +74,19 @@ class FJSPEnv(gym.Env):
                     self.operations = self.jobs * self.max_alternatives
                     self.jobs_max_duration = np.zeros(self.jobs, dtype=int)
                     self.last_activity_jobs = np.zeros(self.jobs, dtype=int)
-                    self.nb_operations_per_activity = np.zeros((self.jobs, self.machines), dtype=int)
+                    #self.nb_operations_per_activity = np.zeros((self.jobs, self.machines), dtype=int)
                     self.legal_jobs = np.ones(self.jobs, dtype=int)
                 else:
                     idx = 1
                     # start counting jobs at null
                     job_nb = line_count - 1
                     id_activity = 0
+                    print(f"job nr: {job_nb}")
+                    print(f"splitted_line: {splitted_line}")
+                    self.last_activity_jobs[job_nb] = str(int(splitted_line[0]) - 1)
                     while idx < len(splitted_line):
-                        # TODO: Improvement: would be better to set number of activities just once
-                        self.last_activity_jobs[job_nb] = id_activity
+                        # TODO: Improvement: would be better to set number of activities just once                   
                         number_operations = int(splitted_line[idx])
-                        self.nb_operations_per_activity[job_nb][id_activity] = number_operations
                         max_time_activity = 0
                         for id_operation in range(1, number_operations+1):
                             machine, time = int(splitted_line[idx + 2 * id_operation - 1]) - 1, int(splitted_line[idx + 2 * id_operation])
@@ -158,7 +161,7 @@ class FJSPEnv(gym.Env):
         self.legal_actions[self.operations] = False
         self.machine_legal = np.zeros(self.machines, dtype=bool)
         self.legal_jobs = np.ones(self.jobs, dtype=bool)
-        self.solution = np.full((self.jobs, self.machines), -1, dtype=int)
+        self.solution = np.full((self.jobs, self.max_activities_jobs), -1, dtype=int)
         self.time_until_available_machine = np.zeros(self.machines, dtype=int)
         self.time_until_activity_finished_jobs = np.zeros(self.jobs, dtype=int) 
         self.todo_activity_jobs = np.zeros(self.jobs, dtype=int)
@@ -238,11 +241,11 @@ class FJSPEnv(gym.Env):
                         self.legal_actions[operation] = False
                         #self.nb_legal_actions -= 1
             needed_machines = self.needed_machine_operation[self.legal_actions[:-1]]
-            for machine in range(self.machines):
-                if machine in needed_machines:
-                    self.machine_legal[machine] = True
-                else:
-                    self.machine_legal[machine] = False
+        for machine in range(self.machines):
+            if machine in needed_machines:
+                self.machine_legal[machine] = True
+            else:
+                self.machine_legal[machine] = False
 
     def _check_no_op(self):
         """
@@ -475,7 +478,7 @@ class FJSPEnv(gym.Env):
                     self.idle_time_jobs_last_op[id_job] = time_difference - was_left_time
                     self.state[id_job:id_job+self.max_alternatives, 5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
                     self.todo_activity_jobs[id_job] += 1
-                    self.state[id_job:id_job+self.max_alternatives, 2] = self.todo_activity_jobs[id_job] / self.machines
+                    self.state[id_job:id_job+self.max_alternatives, 2] = self.todo_activity_jobs[id_job] / self.max_activities_jobs
                     for id_operation in range(self.max_alternatives):
                         operation = id_operation + id_job * self.max_alternatives
                         if self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
@@ -530,7 +533,7 @@ class FJSPEnv(gym.Env):
                     if (
                         self.needed_machine_operation[operation] == machine
                         and not self.legal_actions[operation]
-                        and not self.illegal_actions[machine][operation]
+                        #and not self.illegal_actions[machine][operation]
                         and self.legal_jobs[id_job]
                         and self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]
                     ):
