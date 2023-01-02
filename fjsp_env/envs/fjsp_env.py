@@ -74,7 +74,6 @@ class FJSPEnv(gym.Env):
                     self.operations = self.jobs * self.max_alternatives
                     self.jobs_max_duration = np.zeros(self.jobs, dtype=int)
                     self.last_activity_jobs = np.zeros(self.jobs, dtype=int)
-                    #self.nb_operations_per_activity = np.zeros((self.jobs, self.machines), dtype=int)
                     self.legal_jobs = np.ones(self.jobs, dtype=int)
                 else:
                     idx = 1
@@ -85,7 +84,6 @@ class FJSPEnv(gym.Env):
                     print(f"splitted_line: {splitted_line}")
                     self.last_activity_jobs[job_nb] = str(int(splitted_line[0]) - 1)
                     while idx < len(splitted_line):
-                        # TODO: Improvement: would be better to set number of activities just once                   
                         number_operations = int(splitted_line[idx])
                         max_time_activity = 0
                         for id_operation in range(1, number_operations+1):
@@ -360,8 +358,6 @@ class FJSPEnv(gym.Env):
     def step(self, action: int):
         reward = 0.0
         if action == self.operations:
-            #self.nb_machine_legal = 0
-            #self.nb_legal_actions = 0
             for operation in range(self.operations):
                 if self.legal_actions[operation]:
                     self.legal_actions[operation] = False
@@ -403,7 +399,6 @@ class FJSPEnv(gym.Env):
                 self.next_time_step.insert(index, to_add_time_step)
                 self.next_action.insert(index, action)
             self.solution[id_job][current_time_step_job] = self.current_time_step
-            #self.nb_machine_legal -= 1
             self.legal_jobs[id_job] = False
             for operation in range(self.operations):
                 if (
@@ -411,18 +406,15 @@ class FJSPEnv(gym.Env):
                     and self.legal_actions[operation]
                 ):
                     self.legal_actions[operation] = False
-                    #self.nb_legal_actions -= 1
                 # All alternatives of the action taken are set to illegal
                 elif (
                     self.legal_actions[operation] 
                     and (operation // self.max_alternatives) == id_job
                 ):
                     self.legal_actions[operation] = False
-                    #self.nb_legal_actions -= 1
             self.machine_legal[machine_needed] = False
             # Reduce number of machine legal if the only operation that needed this machine
             # is an alternative of the action that has been choosen.
-            # TODO: Move this to increase time step
             needed_machines = self.needed_machine_operation[self.legal_actions[:-1]]
             for machine in range(self.machines):
                 if machine in needed_machines:
@@ -488,7 +480,6 @@ class FJSPEnv(gym.Env):
                                 self.needed_machine_operation[operation] = -1
                                 if self.legal_actions[operation]:
                                     self.legal_actions[operation] = False
-                                    #self.nb_legal_actions -= 1
                             else:
                                 needed_machine = operation_data[0]
                                 self.needed_machine_operation[operation] = needed_machine
@@ -505,7 +496,6 @@ class FJSPEnv(gym.Env):
                             self.state[operation][4] = 1.0
                             if self.legal_actions[operation]:
                                 self.legal_actions[operation] = False
-                                #self.nb_legal_actions -= 1
             elif self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
                 self.total_idle_time_jobs[id_job] += time_difference
                 self.idle_time_jobs_last_op[id_job] += time_difference
@@ -538,10 +528,8 @@ class FJSPEnv(gym.Env):
                         and self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]
                     ):
                         self.legal_actions[operation] = True
-                        #self.nb_legal_actions += 1
                         if not self.machine_legal[machine]:
                             self.machine_legal[machine] = True
-                            #self.nb_machine_legal += 1
         return hole_planning
     
     def _is_done(self):
