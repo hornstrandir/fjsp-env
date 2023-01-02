@@ -138,16 +138,6 @@ class FJSPEnv(gym.Env):
     def _ids_to_key(self, id_job: int, id_activity : int, id_operation: int) -> str:
         return str(id_job) + str(id_activity) + str(id_operation)
 
-#TODO: this gives errors for keys greater than 999
-    def _key_to_ids(self, key: str):
-        """
-        Order of IDs
-        ------------
-        id_job, id_activity, id_operation
-        """
-
-        return int(key[0]), int(key[1]), int(key[2])
-
     def _get_current_state_representation(self):
         self.state[:, 0] = self.legal_actions[:-1]
         return {
@@ -166,7 +156,8 @@ class FJSPEnv(gym.Env):
         #self.nb_machine_legal = 0
         self.legal_actions = np.ones(self.operations + 1, dtype=bool)
         self.legal_actions[self.operations] = False
-        self.legal_jobs = np.ones(self.jobs, dtype=int)
+        self.machine_legal = np.zeros(self.machines, dtype=bool)
+        self.legal_jobs = np.ones(self.jobs, dtype=bool)
         self.solution = np.full((self.jobs, self.machines), -1, dtype=int)
         self.time_until_available_machine = np.zeros(self.machines, dtype=int)
         self.time_until_activity_finished_jobs = np.zeros(self.jobs, dtype=int) 
@@ -177,7 +168,6 @@ class FJSPEnv(gym.Env):
         self.idle_time_jobs_last_op = np.zeros(self.jobs, dtype=int)
         self.illegal_actions = np.zeros((self.machines, self.operations), dtype=bool) # TODO: what is that for
         self.action_illegal_no_op = np.zeros(self.operations, dtype=bool) # TODO: what is that for
-        self.machine_legal = np.zeros(self.machines, dtype=bool)
         for operation in range(self.operations):
             id_job = operation // self.max_alternatives
             id_operation = operation - id_job * self.max_alternatives
@@ -219,7 +209,7 @@ class FJSPEnv(gym.Env):
                 id_operation = operation - id_job * self.max_alternatives
                 key_this_step = self._ids_to_key(id_job, id_activity, id_operation)
                 # TODO: check if it is possible if this can be called on the really last activity not the penultimate activity
-                if id_activity == (self.last_activity_jobs[id_job]): # - 1
+                if id_activity == self.last_activity_jobs[id_job]: 
                     keys_final_operations.append(key_this_step)
                     final_operations.append(operation)
                 else:
