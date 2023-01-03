@@ -20,7 +20,7 @@ class FJSPEnv(gym.Env):
         if env_config is None:
             env_config = {
                 "instance_path": str(Path(__file__).parent.absolute())
-                + "/instances_preprocessed/MK01.fjs"
+                + "/instances_preprocessed/MK02.fjs"
             }
         instance_path = env_config["instance_path"]
         self.sum_time_activities = 0 # used to scale observations
@@ -80,8 +80,6 @@ class FJSPEnv(gym.Env):
                     # start counting jobs at null
                     job_nb = line_count - 1
                     id_activity = 0
-                    print(f"job nr: {job_nb}")
-                    print(f"splitted_line: {splitted_line}")
                     self.last_activity_jobs[job_nb] = str(int(splitted_line[0]) - 1)
                     while idx < len(splitted_line):
                         number_operations = int(splitted_line[idx])
@@ -180,12 +178,10 @@ class FJSPEnv(gym.Env):
             self.needed_machine_operation[operation] = needed_machine
             if not self.machine_legal[needed_machine]:
                 self.machine_legal[needed_machine] = True
-                #self.nb_machine_legal += 1
         for operation, machine in enumerate(self.needed_machine_operation):
             if machine == -1:
                 # This is just a placeholder. Thus this action must be illegal
                 self.legal_actions[operation] = False
-                #self.nb_legal_actions -= 1
         self.state = np.zeros((self.operations, 7), dtype=float)
         return self._get_current_state_representation()
 
@@ -237,7 +233,6 @@ class FJSPEnv(gym.Env):
                     time_needed_legal = operation_data[1]
                     if time_needed_legal > min_non_final:
                         self.legal_actions[operation] = False
-                        #self.nb_legal_actions -= 1
             needed_machines = self.needed_machine_operation[self.legal_actions[:-1]]
         for machine in range(self.machines):
             if machine in needed_machines:
