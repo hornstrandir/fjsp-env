@@ -17,12 +17,12 @@ class FJSPEnv(gym.Env):
     def __init__(self, env_config=None) -> None:
         super().__init__()
         
+        ROOT = str(Path(__file__).parent.absolute())
         if env_config is None:
             env_config = {
-                "instance_path": str(Path(__file__).parent.absolute())
-                + "/instances_preprocessed/MK02.fjs"
+                "instance_path" : "/instances_preprocessed/MK02.fjs"
             }
-        instance_path = env_config["instance_path"]
+        instance_path = ROOT + (env_config["instance_path"])
         self.sum_time_activities = 0 # used to scale observations
         self.jobs = 0
         self.machines = 0
@@ -119,7 +119,7 @@ class FJSPEnv(gym.Env):
         """
         self.observation_space = gym.spaces.Dict(
             {
-                "action_mask": gym.spaces.Box(0, 1, shape=(self.jobs + 1,)),
+                "action_mask": gym.spaces.Box(0, 1, shape=(self.operations + 1,)),
                 "real_obs": gym.spaces.Box(
                     low=0.0, high=1.0, shape=(self.operations, 7), dtype=float
                 ),
