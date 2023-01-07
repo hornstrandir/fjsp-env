@@ -11,6 +11,7 @@ class TestState(unittest.TestCase):
         average = 0
         for _ in range(100):
             state = env.reset()
+            print(env.instance_map.items())
             self.assertEqual(env.current_time_step, 0)
             legal_actions = env.get_legal_actions()
             done = False
@@ -87,14 +88,14 @@ class TestState(unittest.TestCase):
                     """
                 )
                 assert len(machines_available) == env.nb_machine_legal
-
-                print(f"""
-                action choosen: {actions}
-                current time step: {env.current_time_step}
-                machine legal: {env.machine_legal}
-                action legal: {env.legal_actions}          
+                print(f"solution {env.solution}")
+                #print(f"""
+                #action choosen: {actions}
+                #current time step: {env.current_time_step}
+                #machine legal: {env.machine_legal}
+                #action legal: {env.legal_actions}          
                 
-                """)
+                #""")
 
             average += env.last_time_step
             self.assertEqual(len(env.next_time_step), 0)
@@ -114,3 +115,6 @@ class TestState(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+#http://jobshop.jjvh.nl/solution.php?instance_id=84&hash=26721c7d85d9b732adbeb16b14ba354d
+# add energy consumption to the table/ make span 
