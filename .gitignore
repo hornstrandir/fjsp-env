@@ -40,5 +40,7 @@ env.bak/
 venv.bak/
 
 # Archive
-
 archive/
+
+# WandB
+wandb/
