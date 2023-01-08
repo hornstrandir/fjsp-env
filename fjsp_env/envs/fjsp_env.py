@@ -14,17 +14,11 @@ class FJSPEnv(gym.Env):
     """
     """
 
-    def __init__(self, env_config=None) -> None:
+    def __init__(self, env_config) -> None:
         super().__init__()
-        
-        ROOT = str(Path(__file__).parent.absolute())
-        if env_config is None:
-            env_config = {
-                "instance_path" : "/instances_preprocessed/MK02.fjs"
-            }
-        instance_path = ROOT + (env_config["instance_path"])
+        instance_path = env_config["instance_path"]
         price_data_path = env_config["energy_data_path"]
-        self.loose_noop_restrictions = env_config["loose_noop_restriction"]
+        self.loose_noop_restrictions = env_config["loose_noop_restrictions"]
         self.number_noop_actions = 0
         self.sum_time_activities = 0 # used to scale observations
         self.jobs = 0
@@ -216,7 +210,7 @@ class FJSPEnv(gym.Env):
             if machine == -1:
                 # This is just a placeholder. Thus this action must be illegal
                 self.legal_actions[operation] = False
-        self.state = np.zeros((self.operations, 7), dtype=float)
+        self.state = np.zeros((self.operations, 9), dtype=float)
         return self._get_current_state_representation()
 
     def _prioritization_non_final(self):
