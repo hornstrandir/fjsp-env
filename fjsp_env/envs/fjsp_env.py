@@ -23,6 +23,9 @@ class FJSPEnv(gym.Env):
                 "instance_path" : "/instances_preprocessed/MK02.fjs"
             }
         instance_path = ROOT + (env_config["instance_path"])
+        price_data_path = env_config["energy_data_path"]
+        self.loose_noop_restrictions = env_config["loose_noop_restriction"]
+        self.number_noop_actions = 0
         self.sum_time_activities = 0 # used to scale observations
         self.jobs = 0
         self.machines = 0
@@ -33,11 +36,16 @@ class FJSPEnv(gym.Env):
         self.jobs_max_duration = 0    
         self.max_time_op = 0
         self.max_time_jobs = 0
-        #self.nb_legal_actions = 0
-        #self.nb_machine_legal = 0
         self.nb_activities_per_job = None
-        #self.nb_operations_per_activity = None
         self.last_activity_jobs = None
+        # load energy data
+        self.prices = np.load(price_data_path)
+        self._total_electricity_costs = 0
+        self.max_price = np.amax(self.prices)
+        self.min_price = np.amin(self.prices)
+        self.current_price = None
+        self.alpha = env_config["alpha"]
+
         # initial values for variables used for solving (to reinitialize when reset() is called)
         self.solution = None
         self.last_solution = None
@@ -97,11 +105,16 @@ class FJSPEnv(gym.Env):
                         idx += 1 + 2 * number_operations
                         self.sum_time_activities += max_time_activity
         self.max_time_jobs = np.amax(self.jobs_max_duration)
+        self.power_consumption_machines = np.array(
+            env_config["power_consumption_machines"].get(str(self.machines))
+        )
+        self.max_power_consumption = np.max(self.power_consumption_machines)
         assert self.max_time_op > 0
         assert self.max_time_jobs > 0
         assert self.jobs > 0
         assert self.machines > 1, "We need at least 2 machines"
         assert self.instance_map is not None
+        assert self.min_price >= 0
         self.action_space = gym.spaces.Discrete(self.operations + 1)
         # used for plotting
         self.colors = [
@@ -125,7 +138,28 @@ class FJSPEnv(gym.Env):
                 ),
             }
         )
-    
+
+    @property
+    def total_energy_costs(self):
+        total_energy_costs = 0
+        for operation in range(self.operations):
+            id_job = operation // self.max_activities_jobs
+            id_operation = operation - id_job * self.max_activities_jobs
+            for activity in range(self.nb_activities_per_job[id_job]):
+                op_start_time = self.solution[operation][activity]
+                key = self._ids_to_key(id_job, activity, id_operation) 
+                operation_data = self.instance_map.get(key)
+                if operation_data is None:
+                    continue
+                machine_needed, time_needed = operation_data
+                avg_price = np.average(
+                    self.prices[op_start_time:op_start_time+time_needed]
+                )
+                avg_price *= (self.max_price - self.min_price)
+                avg_price += self.min_price
+                total_energy_costs += avg_price * 60 / 1000 * self.power_consumption_machines[machine_needed] * time_needed
+        return total_energy_costs
+
     @property
     def nb_legal_actions(self):
         return self.legal_actions[:-1].sum()
@@ -151,8 +185,6 @@ class FJSPEnv(gym.Env):
         self.current_time_step = 0
         self.next_time_step = list()
         self.next_action = list()
-        #self.nb_legal_actions = self.operations
-        #self.nb_machine_legal = 0
         self.legal_actions = np.ones(self.operations + 1, dtype=bool)
         self.legal_actions[self.operations] = False
         self.machine_legal = np.zeros(self.machines, dtype=bool)
@@ -167,6 +199,8 @@ class FJSPEnv(gym.Env):
         self.idle_time_jobs_last_op = np.zeros(self.jobs, dtype=int)
         self.illegal_actions = np.zeros((self.machines, self.operations), dtype=bool) # TODO: what is that for
         self.action_illegal_no_op = np.zeros(self.operations, dtype=bool) # TODO: what is that for
+        self.number_noop_actions = 0
+        self._total_electricity_costs = 0
         for operation in range(self.operations):
             id_job = operation // self.max_alternatives
             id_operation = operation - id_job * self.max_alternatives
@@ -250,11 +284,11 @@ class FJSPEnv(gym.Env):
         4. We do not wait for jobs that will be rejected by non-final.
         """
         self.legal_actions[self.operations] = False
-        if (
-            len(self.next_time_step) > 0
-            and self.nb_machine_legal <= 3
-            and self.nb_legal_actions <= 4
-        ):
+        if not self.loose_noop_restrictions:
+            noop_restriction = self.nb_machine_legal <= 3 and self.nb_legal_actions <= 4
+        else:
+            noop_restriction = True
+        if len(self.next_time_step) > 0 and noop_restriction:
             machine_next = set()
             next_time_step = self.next_time_step[0]
             max_horizon = self.current_time_step
@@ -351,8 +385,9 @@ class FJSPEnv(gym.Env):
                         time_step += 1
                             
     def step(self, action: int):
-        reward = 0.0
+        time_reward = 0.0
         if action == self.operations:
+            self.number_noop_actions += 1
             for operation in range(self.operations):
                 if self.legal_actions[operation]:
                     self.legal_actions[operation] = False
@@ -361,8 +396,8 @@ class FJSPEnv(gym.Env):
                     self.illegal_actions[needed_machine][operation] = True
                     self.action_illegal_no_op[operation] = True
             while self.nb_machine_legal == 0:
-                reward -= self.increase_time_step()
-            scaled_reward = self._reward_scaler(reward)
+                time_reward -= self.increase_time_step()
+            scaled_reward = self._reward_scaler(time_reward, energy_penalty=0)
             self._prioritization_non_final()
             self._check_no_op()
             return (
@@ -383,7 +418,8 @@ class FJSPEnv(gym.Env):
                 print(f"illegal action: {action}")
                 raise IllegalActionError
             machine_needed, time_needed = operation_data
-            reward += time_needed
+            energy_penalty = self._calculate_energy_penalty(action, time_needed)
+            time_reward += time_needed
             self.time_until_available_machine[machine_needed] = time_needed
             self.time_until_activity_finished_jobs[id_job] = time_needed
             self.state[action][1] = time_needed / self.max_time_op
@@ -423,11 +459,11 @@ class FJSPEnv(gym.Env):
                     self.illegal_actions[machine_needed][operation] = False
             # if we can't allocate new job in the current timestep, we pass to the next one
             while self.nb_machine_legal == 0 and len(self.next_time_step) > 0:
-                reward -= self.increase_time_step()
+                time_reward -= self.increase_time_step()
             self._prioritization_non_final()
             self._check_no_op()
             # we then need to scale the reward
-            scaled_reward = self._reward_scaler(reward)
+            scaled_reward = self._reward_scaler(time_reward, energy_penalty)
             return (
                 self._get_current_state_representation(),
                 scaled_reward,
@@ -435,8 +471,76 @@ class FJSPEnv(gym.Env):
                 {},
             )
 
-    def _reward_scaler(self, reward):
-        return reward / self.max_time_op
+    def _update_power_observations(self):
+        """
+        Must be called after increasing the timestep since the calculations
+        depend on the next states repr.
+        """
+        for operation in range(self.operations):
+            id_job = operation // self.max_alternatives
+            id_activity = self.todo_activity_jobs[id_job]
+            id_operation = operation - id_job * self.max_alternatives         
+            if self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
+                key = self._ids_to_key(id_job, id_activity, id_operation)
+                operation_data = self.instance_map.get(key)
+                if operation_data is None:
+                    continue
+                machine_needed, time_needed = operation_data
+                self.state[operation][7] = (
+                    self.power_consumption_machines[machine_needed]
+                    / self.max_power_consumption
+                )
+                # since we are only interested in observations of legal actions,
+                # we take the avg of the time when the action can be selected.
+                avg_price = np.average(
+                    self.prices[
+                        self.current_time_step : self.current_time_step + time_needed
+                    ]
+                )
+                # MinMax scaling:
+                scaled_avg = (avg_price - self.min_price) / (self.max_price-self.min_price)
+                self.state[operation][8] = scaled_avg
+            else:
+                self.state[operation][7] = 1.0
+                self.state[operation][8] = 1.0
+
+    # TODO: energy penalty can contain total energy costs
+    def _calculate_energy_penalty(self, action: int, processing_time: int):
+        """
+        The penalty is scaled by the max_price.
+
+        penalty = avg(price_vector) * power_consumption_machine / 60 / max_price
+        """
+        avg_price = np.average(
+            self.prices[
+                self.current_time_step : self.current_time_step + processing_time
+            ]
+        )
+        # here we can even use negative values.
+        # It is good to schedule energy intense ops when there are negative energy prices.
+        power_consumption = self.power_consumption_machines[
+            self.needed_machine_operation[action]
+        ]
+        # using ratio avg_price/max_energy_price thus unitless
+        return avg_price / self.max_price * power_consumption / self.max_power_consumption
+
+    # TODO: Impact of ignoring energy_reward for noop.
+    def _reward_scaler(self, reward: float, energy_penalty: float = 0):
+        """
+        Calculate the scaled reward consisting of the regular unscaled reward
+        and the scaled energy_penalty.
+        """
+        if energy_penalty == 0:
+            return reward / self.max_time_op
+        return (1 - self.alpha) * (reward / self.max_time_op) - self.alpha * energy_penalty
+
+    def _update_total_energy_costs(self):
+        power_consumption = self.power_consumption_machines.copy()
+        # Legal machines are idle. Thus they don't consume energy.
+        power_consumption[self.machine_legal] = 0
+        self._total_energy_costs += np.sum(
+            power_consumption * self.ts_energy_prices[self.current_time_step]
+        )
 
     def increase_time_step(self):
         hole_planning = 0
@@ -525,6 +629,13 @@ class FJSPEnv(gym.Env):
                         self.legal_actions[operation] = True
                         if not self.machine_legal[machine]:
                             self.machine_legal[machine] = True
+        self._update_power_observations()
+        power_consumption = self.power_consumption_machines.copy()
+        # Legal machines are idle. Thus they don't consume energy.
+        power_consumption[self.machine_legal] = 0
+        self._total_electricity_costs += np.sum(
+            power_consumption * self.prices[self.current_time_step]
+        )
         return hole_planning
     
     def _is_done(self):
