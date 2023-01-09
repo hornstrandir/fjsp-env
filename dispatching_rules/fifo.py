@@ -1,12 +1,13 @@
 import random
 import numpy as np
 import wandb
-from envs.energy_flexible_jss_env import EnergyFlexibleJssEnv
+from fjsp_env.envs.fjsp_env import FjspEnv
+from utils.config import ENV_CONFIG
 
 
 def FIFO_worker(env_config):
     wandb.init(config=env_config)
-    env = EnergyFlexibleJssEnv(env_config)
+    env = FjspEnv(env_config)
     env.seed(2022)
     random.seed(2022)
     np.random.seed(2022)
@@ -15,7 +16,7 @@ def FIFO_worker(env_config):
     while not done:
         real_state = np.copy(state['real_obs'])
         legal_actions = state['action_mask'][:-1]
-        reshaped = np.reshape(real_state, (env.jobs, 9))
+        reshaped = np.reshape(real_state, (env.operations, 9))
         remaining_time = reshaped[:, 5]
         illegal_actions = np.invert(legal_actions)
         mask = illegal_actions * -1e8
@@ -30,4 +31,4 @@ def FIFO_worker(env_config):
     wandb.log({"nb_episodes": 1, "make_span": make_span, "total_energy_costs": total_energy_costs})
 
 if __name__ == "__main__":
-    FIFO_worker(default_config)
+    FIFO_worker(ENV_CONFIG)
