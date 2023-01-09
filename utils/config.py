@@ -10,8 +10,8 @@ MODEL_CONFIG = {
 }
 
 ENV_CONFIG = {
-    "instance_path": "/instances_preprocessed/MK03.fjs",
-    "energy_data_path": ROOT / "data/energy_data/elect_price_2022_kwmin.pkl",
+    "instance_path": ROOT / "data/instances_preprocessed/MK01.fjs",
+    "energy_data_path": ROOT / "data/electric_price/price_MinMax_sept_14_days.npy",
     "power_consumption_machines": {
         "4": [8, 19, 17, 7],
         "5": [12, 8, 3, 4, 7],
@@ -21,7 +21,8 @@ ENV_CONFIG = {
         "15": [12, 3, 19, 10, 5, 13, 11, 18, 17, 16, 14, 12, 3, 10, 18],
         "20": [3, 8, 19, 6, 1, 19, 13, 9, 5, 18, 9, 1, 15, 9, 13, 14, 7, 9, 2, 3],
     },
-    "penalty_weight": 0.75,
+    "alpha": 0.75,
+    "loose_noop_restrictions": False,
 }
 MODIFIED_CONFIG_PPO = {
     "env": "FjspEnv-v0", 

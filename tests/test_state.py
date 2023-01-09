@@ -1,17 +1,17 @@
 import unittest
 import numpy as np
-from fjsp_env.envs.fjsp_env import FJSPEnv
+from fjsp_env.envs.fjsp_env import FjspEnv
+from utils.config import ENV_CONFIG
 
 
 class TestState(unittest.TestCase):
     def test_random(self):
-        env = FJSPEnv(
-            env_config=None,
+        env = FjspEnv(
+            env_config=ENV_CONFIG,
         )
         average = 0
         for _ in range(100):
             state = env.reset()
-            print(env.instance_map.items())
             self.assertEqual(env.current_time_step, 0)
             legal_actions = env.get_legal_actions()
             done = False
@@ -88,7 +88,7 @@ class TestState(unittest.TestCase):
                     """
                 )
                 assert len(machines_available) == env.nb_machine_legal
-                print(f"solution {env.solution}")
+                #print(f"solution {env.solution}")
                 #print(f"""
                 #action choosen: {actions}
                 #current time step: {env.current_time_step}
@@ -96,7 +96,6 @@ class TestState(unittest.TestCase):
                 #action legal: {env.legal_actions}          
                 
                 #""")
-
             average += env.last_time_step
             self.assertEqual(len(env.next_time_step), 0)
             for job in range(env.jobs):
@@ -112,9 +111,9 @@ class TestState(unittest.TestCase):
                     time until activity finished: {env.time_until_activity_finished_jobs}
                     time until machine free: {env.time_until_available_machine}
                     """)
+            self.assertTrue(env.total_energy_costs, )
+            self.assertIsInstance(env.total_energy_costs, float,
+            f"energy costs: {env.total_energy_costs}")
 
 if __name__ == '__main__':
     unittest.main()
-
-#http://jobshop.jjvh.nl/solution.php?instance_id=84&hash=26721c7d85d9b732adbeb16b14ba354d
-# add energy consumption to the table/ make span 

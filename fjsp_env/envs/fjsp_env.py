@@ -10,7 +10,7 @@ class IllegalActionError(Exception):
     pass
 
 #TODO: check if illegal actions do have some heavy computations. If so: use: if legal_action(action): ...
-class FJSPEnv(gym.Env):
+class FjspEnv(gym.Env):
     """
     """
 
@@ -19,7 +19,7 @@ class FJSPEnv(gym.Env):
         instance_path = env_config["instance_path"]
         price_data_path = env_config["energy_data_path"]
         self.loose_noop_restrictions = env_config["loose_noop_restrictions"]
-        self.number_noop_actions = 0
+        self.count_noop = 0
         self.sum_time_activities = 0 # used to scale observations
         self.jobs = 0
         self.machines = 0
@@ -30,7 +30,6 @@ class FJSPEnv(gym.Env):
         self.jobs_max_duration = 0    
         self.max_time_op = 0
         self.max_time_jobs = 0
-        self.nb_activities_per_job = None
         self.last_activity_jobs = None
         # load energy data
         self.prices = np.load(price_data_path)
@@ -42,6 +41,7 @@ class FJSPEnv(gym.Env):
 
         # initial values for variables used for solving (to reinitialize when reset() is called)
         self.solution = None
+        self.solution_machines = None
         self.last_solution = None
         self.last_time_step = float("inf")
         self.current_time_step = float("inf")
@@ -128,7 +128,7 @@ class FJSPEnv(gym.Env):
             {
                 "action_mask": gym.spaces.Box(0, 1, shape=(self.operations + 1,)),
                 "real_obs": gym.spaces.Box(
-                    low=0.0, high=1.0, shape=(self.operations, 7), dtype=float
+                    low=0.0, high=1.0, shape=(self.operations, 9), dtype=float
                 ),
             }
         )
@@ -137,11 +137,12 @@ class FJSPEnv(gym.Env):
     def total_energy_costs(self):
         total_energy_costs = 0
         for operation in range(self.operations):
-            id_job = operation // self.max_activities_jobs
-            id_operation = operation - id_job * self.max_activities_jobs
-            for activity in range(self.nb_activities_per_job[id_job]):
+            id_job = operation // self.max_alternatives
+            for activity in range(self.last_activity_jobs[id_job]+1):
                 op_start_time = self.solution[operation][activity]
-                key = self._ids_to_key(id_job, activity, id_operation) 
+                if op_start_time == -1:
+                    continue
+                key = self._ids_to_key(id_job, activity, operation - id_job*self.max_alternatives) 
                 operation_data = self.instance_map.get(key)
                 if operation_data is None:
                     continue
@@ -183,7 +184,7 @@ class FJSPEnv(gym.Env):
         self.legal_actions[self.operations] = False
         self.machine_legal = np.zeros(self.machines, dtype=bool)
         self.legal_jobs = np.ones(self.jobs, dtype=bool)
-        self.solution = np.full((self.jobs, self.max_activities_jobs), -1, dtype=int)
+        self.solution = np.full((self.operations, self.max_activities_jobs), -1, dtype=int)
         self.time_until_available_machine = np.zeros(self.machines, dtype=int)
         self.time_until_activity_finished_jobs = np.zeros(self.jobs, dtype=int) 
         self.todo_activity_jobs = np.zeros(self.jobs, dtype=int)
@@ -193,7 +194,7 @@ class FJSPEnv(gym.Env):
         self.idle_time_jobs_last_op = np.zeros(self.jobs, dtype=int)
         self.illegal_actions = np.zeros((self.machines, self.operations), dtype=bool) # TODO: what is that for
         self.action_illegal_no_op = np.zeros(self.operations, dtype=bool) # TODO: what is that for
-        self.number_noop_actions = 0
+        self.count_noop = 0
         self._total_electricity_costs = 0
         for operation in range(self.operations):
             id_job = operation // self.max_alternatives
@@ -381,7 +382,7 @@ class FJSPEnv(gym.Env):
     def step(self, action: int):
         time_reward = 0.0
         if action == self.operations:
-            self.number_noop_actions += 1
+            self.count_noop += 1
             for operation in range(self.operations):
                 if self.legal_actions[operation]:
                     self.legal_actions[operation] = False
@@ -405,7 +406,7 @@ class FJSPEnv(gym.Env):
             id_activity = self.todo_activity_jobs[id_job]
             id_operation = action - id_job * self.max_alternatives
             key = self._ids_to_key(id_job, id_activity, id_operation)
-            current_time_step_job = self.todo_activity_jobs[id_job]
+            current_activity_job = self.todo_activity_jobs[id_job]
             operation_data = self.instance_map.get(key)
             #TODO: delete if tests are ok
             if operation_data is None:
@@ -423,7 +424,7 @@ class FJSPEnv(gym.Env):
                 index = bisect.bisect_left(self.next_time_step, to_add_time_step)
                 self.next_time_step.insert(index, to_add_time_step)
                 self.next_action.insert(index, action)
-            self.solution[id_job][current_time_step_job] = self.current_time_step
+            self.solution[action][current_activity_job] = self.current_time_step
             self.legal_jobs[id_job] = False
             for operation in range(self.operations):
                 if (
