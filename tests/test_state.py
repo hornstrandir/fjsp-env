@@ -88,18 +88,10 @@ class TestState(unittest.TestCase):
                     """
                 )
                 assert len(machines_available) == env.nb_machine_legal
-                #print(f"solution {env.solution}")
-                #print(f"""
-                #action choosen: {actions}
-                #current time step: {env.current_time_step}
-                #machine legal: {env.machine_legal}
-                #action legal: {env.legal_actions}          
-                
-                #""")
+
             average += env.last_time_step
             self.assertEqual(len(env.next_time_step), 0)
             for job in range(env.jobs):
-                #self.assertEqual((env.solution[job] == -1).sum(), (env.machines - env.last_activity_jobs[job]-1))
                 self.assertEqual(
                     env.todo_activity_jobs[job], 
                     env.last_activity_jobs[job] + 1,
