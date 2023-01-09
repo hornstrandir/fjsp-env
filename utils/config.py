@@ -23,6 +23,7 @@ ENV_CONFIG = {
     },
     "alpha": 0.75,
     "loose_noop_restrictions": False,
+    "seed": 2023
 }
 MODIFIED_CONFIG_PPO = {
     "env": "FjspEnv-v0", 

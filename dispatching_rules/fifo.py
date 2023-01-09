@@ -8,9 +8,9 @@ from utils.config import ENV_CONFIG
 def FIFO_worker(env_config):
     wandb.init(config=env_config)
     env = FjspEnv(env_config)
-    env.seed(2022)
-    random.seed(2022)
-    np.random.seed(2022)
+    env.seed(2023)
+    random.seed(2023)
+    np.random.seed(2023)
     done = False
     state = env.reset()
     while not done:
