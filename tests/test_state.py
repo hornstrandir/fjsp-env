@@ -45,9 +45,9 @@ class TestState(unittest.TestCase):
                 )[0]
                 actions_taken.append(actions)
                 self.assertEqual(
-                legal_actions[:-1].sum(),
-                env.nb_legal_actions,
-                f"""
+                    legal_actions[:-1].sum(),
+                    env.nb_legal_actions,
+                    f"""
                 legal_actions {legal_actions[:-1].sum()} and nb legal actions {env.nb_legal_actions} are not coherant, 
                 legal_actions: {env.legal_actions}
                 """,
@@ -56,10 +56,9 @@ class TestState(unittest.TestCase):
                 legal_actions = env.get_legal_actions()
                 total_reward += rewards
 
-
                 self.assertTrue(
-                    max(state["real_obs"].flatten()) <= 1.0, "Out of max bound state"
-                    f"state: {state['real_obs']}"
+                    max(state["real_obs"].flatten()) <= 1.0,
+                    "Out of max bound state" f"state: {state['real_obs']}",
                 )
                 self.assertTrue(
                     min(state["real_obs"].flatten()) >= 0.0, "Out of min bound state"
@@ -85,7 +84,7 @@ class TestState(unittest.TestCase):
                     current activity jobs: {env.todo_activity_jobs},
                     last activity jobs: {env.last_activity_jobs},
                     needed machines operations: {env.needed_machine_operation},
-                    """
+                    """,
                 )
                 assert len(machines_available) == env.nb_machine_legal
 
@@ -93,7 +92,7 @@ class TestState(unittest.TestCase):
             self.assertEqual(len(env.next_time_step), 0)
             for job in range(env.jobs):
                 self.assertEqual(
-                    env.todo_activity_jobs[job], 
+                    env.todo_activity_jobs[job],
                     env.last_activity_jobs[job] + 1,
                     f"""
                     last activity jobs: {env.last_activity_jobs},
@@ -102,10 +101,15 @@ class TestState(unittest.TestCase):
                     actions taken: {actions_taken}
                     time until activity finished: {env.time_until_activity_finished_jobs}
                     time until machine free: {env.time_until_available_machine}
-                    """)
-            self.assertTrue(env.total_energy_costs, )
-            self.assertIsInstance(env.total_energy_costs, float,
-            f"energy costs: {env.total_energy_costs}")
+                    """,
+                )
+            self.assertTrue(
+                env.total_energy_costs,
+            )
+            self.assertIsInstance(
+                env.total_energy_costs, float, f"energy costs: {env.total_energy_costs}"
+            )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

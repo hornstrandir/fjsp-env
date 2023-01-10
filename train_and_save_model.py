@@ -25,25 +25,26 @@ ROOT = Path(__file__).parent.absolute()
 tf1, tf, tfv = try_import_tf()
 # Use these result keys to update `wandb.config`
 _config_results = [
-    "trial_id", "experiment_tag", "node_ip", "experiment_id", "hostname",
-    "pid", "date",
+    "trial_id",
+    "experiment_tag",
+    "node_ip",
+    "experiment_id",
+    "hostname",
+    "pid",
+    "date",
 ]
 _exclude_results = ["done", "should_checkpoint", "config"]
 
 
-def _handle_result(result) :
+def _handle_result(result):
     config_update = result.get("config", {}).copy()
     log = {}
     flat_result = flatten_dict(result, delimiter="/")
 
     for k, v in flat_result.items():
-        if any(
-                k.startswith(item + "/") or k == item
-                for item in _config_results):
+        if any(k.startswith(item + "/") or k == item for item in _config_results):
             config_update[k] = v
-        elif any(
-                k.startswith(item + "/") or k == item
-                for item in _exclude_results):
+        elif any(k.startswith(item + "/") or k == item for item in _exclude_results):
             continue
         else:
             log[k] = v
@@ -66,14 +67,14 @@ if __name__ == "__main__":
     ppo_config.update(MODIFIED_CONFIG_PPO)
     wandb.config.update(ppo_config)
     trainer = ppo.PPO(config=ppo_config)
-    
+
     start_time = time.time()
-    
+
     stop = {
         "time_total_s": 10 * 60,
     }
-    while start_time + stop['time_total_s'] > time.time():
-        result = trainer.train()        
+    while start_time + stop["time_total_s"] > time.time():
+        result = trainer.train()
         result = wandb_tune._clean_log(result)
         log, config_update = _handle_result(result)
         wandb.log(result["custom_metrics"])
@@ -81,4 +82,4 @@ if __name__ == "__main__":
         wandb.config.update(config_update, allow_val_change=True)
 
     trainer.save(ROOT / "checkpoints" / str(wandb.run.name))
-    ray.shutdown()    
+    ray.shutdown()

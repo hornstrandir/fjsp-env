@@ -19,7 +19,7 @@ class CustomCallbacks(DefaultCallbacks):
         episode: MultiAgentEpisode,
         **kwargs,
     ):
-        #env = base_env.get_unwrapped()[0]
+        # env = base_env.get_unwrapped()[0]
         env = base_env.get_sub_environments()[0]
         if env.last_time_step != float("inf"):
             episode.custom_metrics["make_span"] = env.last_time_step

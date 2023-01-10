@@ -1,4 +1,3 @@
-
 import gym
 import random
 import bisect
@@ -6,13 +5,14 @@ import numpy as np
 import datetime
 from pathlib import Path
 
+
 class IllegalActionError(Exception):
     pass
 
-#TODO: check if illegal actions do have some heavy computations. If so: use: if legal_action(action): ...
+
+# TODO: check if illegal actions do have some heavy computations. If so: use: if legal_action(action): ...
 class FjspEnv(gym.Env):
-    """
-    """
+    """ """
 
     def __init__(self, env_config) -> None:
         super().__init__()
@@ -20,14 +20,13 @@ class FjspEnv(gym.Env):
         price_data_path = env_config["energy_data_path"]
         self.loose_noop_restrictions = env_config["loose_noop_restrictions"]
         self.count_noop = 0
-        self.sum_time_activities = 0 # used to scale observations
+        self.sum_time_activities = 0  # used to scale observations
         self.jobs = 0
         self.machines = 0
         self.max_alternatives = 0
         self.operations = 0
         self.instance_map = {}
-
-        self.jobs_max_duration = 0    
+        self.jobs_max_duration = 0
         self.max_time_op = 0
         self.max_time_jobs = 0
         self.last_activity_jobs = None
@@ -38,7 +37,6 @@ class FjspEnv(gym.Env):
         self.min_price = np.amin(self.prices)
         self.current_price = None
         self.alpha = env_config["alpha"]
-
         # initial values for variables used for solving (to reinitialize when reset() is called)
         self.solution = None
         self.solution_machines = None
@@ -49,7 +47,7 @@ class FjspEnv(gym.Env):
         self.next_action = list()
         self.legal_actions = None
         self.time_until_available_machine = None
-        self.time_until_activity_finished_jobs = None 
+        self.time_until_activity_finished_jobs = None
         self.todo_activity_jobs = None
         self.total_perform_op_time_jobs = None
         self.needed_machine_operation = None
@@ -63,7 +61,7 @@ class FjspEnv(gym.Env):
         # initial values for variables used for representation
         self.start_timestamp = datetime.datetime.now().timestamp()
         self.sum_op = 0
-        with open(instance_path, 'r') as instance_file:
+        with open(instance_path, "r") as instance_file:
             for line_count, line in enumerate(instance_file):
                 splitted_line = line.split()
                 if len(splitted_line) == 0:
@@ -71,7 +69,7 @@ class FjspEnv(gym.Env):
                 if line_count == 0:
                     self.jobs = int(splitted_line[0])
                     self.machines = int(splitted_line[1])
-                    self.max_activities_jobs = int(splitted_line[2]) # TODO: do we need it
+                    self.max_activities_jobs = int(splitted_line[2])
                     self.max_alternatives = int(splitted_line[3])
                     self.operations = self.jobs * self.max_alternatives
                     self.jobs_max_duration = np.zeros(self.jobs, dtype=int)
@@ -86,11 +84,15 @@ class FjspEnv(gym.Env):
                     while idx < len(splitted_line):
                         number_operations = int(splitted_line[idx])
                         max_time_activity = 0
-                        for id_operation in range(1, number_operations+1):
-                            machine, time = int(splitted_line[idx + 2 * id_operation - 1]) - 1, int(splitted_line[idx + 2 * id_operation])
+                        for id_operation in range(1, number_operations + 1):
+                            machine, time = int(
+                                splitted_line[idx + 2 * id_operation - 1]
+                            ) - 1, int(splitted_line[idx + 2 * id_operation])
                             if time > max_time_activity:
                                 max_time_activity = time
-                            key = self._ids_to_key(job_nb, id_activity, id_operation-1)
+                            key = self._ids_to_key(
+                                job_nb, id_activity, id_operation - 1
+                            )
                             self.instance_map[key] = machine, time
                         self.jobs_max_duration[job_nb] += max_time_activity
                         self.max_time_op = max(self.max_time_op, max_time_activity)
@@ -138,32 +140,40 @@ class FjspEnv(gym.Env):
         total_energy_costs = 0
         for operation in range(self.operations):
             id_job = operation // self.max_alternatives
-            for activity in range(self.last_activity_jobs[id_job]+1):
+            for activity in range(self.last_activity_jobs[id_job] + 1):
                 op_start_time = self.solution[operation][activity]
                 if op_start_time == -1:
                     continue
-                key = self._ids_to_key(id_job, activity, operation - id_job*self.max_alternatives) 
+                key = self._ids_to_key(
+                    id_job, activity, operation - id_job * self.max_alternatives
+                )
                 operation_data = self.instance_map.get(key)
                 if operation_data is None:
                     continue
                 machine_needed, time_needed = operation_data
                 avg_price = np.average(
-                    self.prices[op_start_time:op_start_time+time_needed]
+                    self.prices[op_start_time : op_start_time + time_needed]
                 )
-                avg_price *= (self.max_price - self.min_price)
+                avg_price *= self.max_price - self.min_price
                 avg_price += self.min_price
-                total_energy_costs += avg_price * 60 / 1000 * self.power_consumption_machines[machine_needed] * time_needed
+                total_energy_costs += (
+                    avg_price
+                    * 60
+                    / 1000
+                    * self.power_consumption_machines[machine_needed]
+                    * time_needed
+                )
         return total_energy_costs
 
     @property
     def nb_legal_actions(self):
         return self.legal_actions[:-1].sum()
-    
+
     @property
     def nb_machine_legal(self):
         return self.machine_legal.sum()
-    
-    def _ids_to_key(self, id_job: int, id_activity : int, id_operation: int) -> str:
+
+    def _ids_to_key(self, id_job: int, id_activity: int, id_operation: int) -> str:
         return str(id_job) + str(id_activity) + str(id_operation)
 
     def _get_current_state_representation(self):
@@ -184,16 +194,18 @@ class FjspEnv(gym.Env):
         self.legal_actions[self.operations] = False
         self.machine_legal = np.zeros(self.machines, dtype=bool)
         self.legal_jobs = np.ones(self.jobs, dtype=bool)
-        self.solution = np.full((self.operations, self.max_activities_jobs), -1, dtype=int)
+        self.solution = np.full(
+            (self.operations, self.max_activities_jobs), -1, dtype=int
+        )
         self.time_until_available_machine = np.zeros(self.machines, dtype=int)
-        self.time_until_activity_finished_jobs = np.zeros(self.jobs, dtype=int) 
+        self.time_until_activity_finished_jobs = np.zeros(self.jobs, dtype=int)
         self.todo_activity_jobs = np.zeros(self.jobs, dtype=int)
-        self.total_perform_op_time_jobs = np.zeros(self.jobs, dtype=int)     
-        self.needed_machine_operation = np.full(self.operations, -1)           
-        self.total_idle_time_jobs = np.zeros(self.jobs, dtype=int)      
+        self.total_perform_op_time_jobs = np.zeros(self.jobs, dtype=int)
+        self.needed_machine_operation = np.full(self.operations, -1)
+        self.total_idle_time_jobs = np.zeros(self.jobs, dtype=int)
         self.idle_time_jobs_last_op = np.zeros(self.jobs, dtype=int)
-        self.illegal_actions = np.zeros((self.machines, self.operations), dtype=bool) # TODO: what is that for
-        self.action_illegal_no_op = np.zeros(self.operations, dtype=bool) # TODO: what is that for
+        self.illegal_actions = np.zeros((self.machines, self.operations), dtype=bool)
+        self.action_illegal_no_op = np.zeros(self.operations, dtype=bool)
         self.count_noop = 0
         self._total_electricity_costs = 0
         for operation in range(self.operations):
@@ -235,7 +247,7 @@ class FjspEnv(gym.Env):
                 id_operation = operation - id_job * self.max_alternatives
                 key_this_step = self._ids_to_key(id_job, id_activity, id_operation)
                 # TODO: check if it is possible if this can be called on the really last activity not the penultimate activity
-                if id_activity == self.last_activity_jobs[id_job]: 
+                if id_activity == self.last_activity_jobs[id_job]:
                     keys_final_operations.append(key_this_step)
                     final_operations.append(operation)
                 else:
@@ -243,16 +255,16 @@ class FjspEnv(gym.Env):
                     if operation_data is None:
                         continue
                     time_needed_legal = operation_data[1]
-                    key_next_step = self._ids_to_key(id_job, id_activity + 1, id_operation)
+                    key_next_step = self._ids_to_key(
+                        id_job, id_activity + 1, id_operation
+                    )
                     operation_data = self.instance_map.get(key_next_step)
                     if operation_data is None:
                         continue
                     machine_needed_nextstep = operation_data[0]
-                    if (
-                        self.time_until_available_machine[machine_needed_nextstep] == 0
-                    ):
+                    if self.time_until_available_machine[machine_needed_nextstep] == 0:
                         min_non_final = min(min_non_final, time_needed_legal)
-                        non_final_operations.append(operation)  
+                        non_final_operations.append(operation)
             if len(non_final_operations) > 0:
                 for idx, key in enumerate(keys_final_operations):
                     operation = final_operations[idx]
@@ -274,7 +286,7 @@ class FjspEnv(gym.Env):
         Restrictions:
         1. Disallow No-Op if: four or more machines with some allocatable job.
         2. Disallow No-Op if: five or more allocatable jobs.
-        3. If we make a pause longer than D it would be better to 
+        3. If we make a pause longer than D it would be better to
             allocate a job with duration D.
         4. We do not wait for jobs that will be rejected by non-final.
         """
@@ -326,7 +338,8 @@ class FjspEnv(gym.Env):
                         + self.time_until_activity_finished_jobs[id_job]
                     )
                     while (
-                        time_step < self.last_activity_jobs[id_job] - 1 and max_horizon > time_needed
+                        time_step < self.last_activity_jobs[id_job] - 1
+                        and max_horizon > time_needed
                     ):
                         next_key = self._ids_to_key(id_operation, time_step, id_job)
                         operation_data = self.instance_map.get(next_key)
@@ -350,7 +363,9 @@ class FjspEnv(gym.Env):
                     and id_activity <= self.last_activity_jobs[id_job]
                 ):
                     time_step = self.todo_activity_jobs[id_job]
-                    key_next_timestep = self._ids_to_key(id_job, time_step, id_operation)
+                    key_next_timestep = self._ids_to_key(
+                        id_job, time_step, id_operation
+                    )
                     operation_data = self.instance_map.get(key_next_timestep)
                     if operation_data is None:
                         continue
@@ -360,9 +375,12 @@ class FjspEnv(gym.Env):
                         + self.time_until_available_machine[machine_needed]
                     )
                     while (
-                        time_step < self.last_activity_jobs[id_job] and max_horizon > time_needed
+                        time_step < self.last_activity_jobs[id_job]
+                        and max_horizon > time_needed
                     ):
-                        key_next_timestep = self._ids_to_key(id_operation, time_step, id_job)
+                        key_next_timestep = self._ids_to_key(
+                            id_operation, time_step, id_job
+                        )
                         operation_data = self.instance_map.get(key_next_timestep)
                         if operation_data is None:
                             time_step += 1
@@ -378,7 +396,7 @@ class FjspEnv(gym.Env):
                                 return
                         time_needed += duration_operation
                         time_step += 1
-                            
+
     def step(self, action: int):
         time_reward = 0.0
         if action == self.operations:
@@ -408,7 +426,7 @@ class FjspEnv(gym.Env):
             key = self._ids_to_key(id_job, id_activity, id_operation)
             current_activity_job = self.todo_activity_jobs[id_job]
             operation_data = self.instance_map.get(key)
-            #TODO: delete if tests are ok
+            # TODO: delete if tests are ok
             if operation_data is None:
                 print(f"illegal action: {action}")
                 raise IllegalActionError
@@ -434,7 +452,7 @@ class FjspEnv(gym.Env):
                     self.legal_actions[operation] = False
                 # All alternatives of the action taken are set to illegal
                 elif (
-                    self.legal_actions[operation] 
+                    self.legal_actions[operation]
                     and (operation // self.max_alternatives) == id_job
                 ):
                     self.legal_actions[operation] = False
@@ -474,7 +492,7 @@ class FjspEnv(gym.Env):
         for operation in range(self.operations):
             id_job = operation // self.max_alternatives
             id_activity = self.todo_activity_jobs[id_job]
-            id_operation = operation - id_job * self.max_alternatives         
+            id_operation = operation - id_job * self.max_alternatives
             if self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
                 key = self._ids_to_key(id_job, id_activity, id_operation)
                 operation_data = self.instance_map.get(key)
@@ -493,7 +511,9 @@ class FjspEnv(gym.Env):
                     ]
                 )
                 # MinMax scaling:
-                scaled_avg = (avg_price - self.min_price) / (self.max_price-self.min_price)
+                scaled_avg = (avg_price - self.min_price) / (
+                    self.max_price - self.min_price
+                )
                 self.state[operation][8] = scaled_avg
             else:
                 self.state[operation][7] = 1.0
@@ -517,7 +537,9 @@ class FjspEnv(gym.Env):
             self.needed_machine_operation[action]
         ]
         # using ratio avg_price/max_energy_price thus unitless
-        return avg_price / self.max_price * power_consumption / self.max_power_consumption
+        return (
+            avg_price / self.max_price * power_consumption / self.max_power_consumption
+        )
 
     # TODO: Impact of ignoring energy_reward for noop.
     def _reward_scaler(self, reward: float, energy_penalty: float = 0):
@@ -527,7 +549,9 @@ class FjspEnv(gym.Env):
         """
         if energy_penalty == 0:
             return reward / self.max_time_op
-        return (1 - self.alpha) * (reward / self.max_time_op) - self.alpha * energy_penalty
+        return (1 - self.alpha) * (
+            reward / self.max_time_op
+        ) - self.alpha * energy_penalty
 
     def _update_total_energy_costs(self):
         power_consumption = self.power_consumption_machines.copy()
@@ -550,25 +574,38 @@ class FjspEnv(gym.Env):
                 self.time_until_activity_finished_jobs[id_job] = max(
                     0, self.time_until_activity_finished_jobs[id_job] - time_difference
                 )
-                self.state[id_job:id_job+self.max_alternatives, 1] = (
+                self.state[id_job : id_job + self.max_alternatives, 1] = (
                     self.time_until_activity_finished_jobs[id_job] / self.max_time_op
                 )
                 self.total_perform_op_time_jobs[id_job] += performed_op_job
-                self.state[id_job:id_job+self.max_alternatives, 3] = (
+                self.state[id_job : id_job + self.max_alternatives, 3] = (
                     self.total_perform_op_time_jobs[id_job] / self.max_time_jobs
                 )
                 if self.time_until_activity_finished_jobs[id_job] == 0:
                     self.legal_jobs[id_job] = True
                     self.total_idle_time_jobs[id_job] += time_difference - was_left_time
-                    self.state[id_job:id_job+self.max_alternatives, 6] = self.total_idle_time_jobs[id_job] / self.sum_op
-                    self.idle_time_jobs_last_op[id_job] = time_difference - was_left_time
-                    self.state[id_job:id_job+self.max_alternatives, 5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
+                    self.state[id_job : id_job + self.max_alternatives, 6] = (
+                        self.total_idle_time_jobs[id_job] / self.sum_op
+                    )
+                    self.idle_time_jobs_last_op[id_job] = (
+                        time_difference - was_left_time
+                    )
+                    self.state[id_job : id_job + self.max_alternatives, 5] = (
+                        self.idle_time_jobs_last_op[id_job] / self.sum_op
+                    )
                     self.todo_activity_jobs[id_job] += 1
-                    self.state[id_job:id_job+self.max_alternatives, 2] = self.todo_activity_jobs[id_job] / self.max_activities_jobs
+                    self.state[id_job : id_job + self.max_alternatives, 2] = (
+                        self.todo_activity_jobs[id_job] / self.max_activities_jobs
+                    )
                     for id_operation in range(self.max_alternatives):
                         operation = id_operation + id_job * self.max_alternatives
-                        if self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
-                            key = self._ids_to_key(id_job, self.todo_activity_jobs[id_job], id_operation)
+                        if (
+                            self.todo_activity_jobs[id_job]
+                            <= self.last_activity_jobs[id_job]
+                        ):
+                            key = self._ids_to_key(
+                                id_job, self.todo_activity_jobs[id_job], id_operation
+                            )
                             operation_data = self.instance_map.get(key)
                             if operation_data is None:
                                 self.needed_machine_operation[operation] = -1
@@ -576,10 +613,16 @@ class FjspEnv(gym.Env):
                                     self.legal_actions[operation] = False
                             else:
                                 needed_machine = operation_data[0]
-                                self.needed_machine_operation[operation] = needed_machine
+                                self.needed_machine_operation[
+                                    operation
+                                ] = needed_machine
                                 self.state[operation][4] = (
                                     max(
-                                        0, self.time_until_available_machine[needed_machine] - time_difference,
+                                        0,
+                                        self.time_until_available_machine[
+                                            needed_machine
+                                        ]
+                                        - time_difference,
                                     )
                                     / self.max_time_op
                                 )
@@ -593,9 +636,13 @@ class FjspEnv(gym.Env):
             elif self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]:
                 self.total_idle_time_jobs[id_job] += time_difference
                 self.idle_time_jobs_last_op[id_job] += time_difference
-                self.state[id_job:id_job+self.max_alternatives, 5] = self.idle_time_jobs_last_op[id_job] / self.sum_op
-                self.state[id_job:id_job+self.max_alternatives, 6] = self.total_idle_time_jobs[id_job] / self.sum_op
-        
+                self.state[id_job : id_job + self.max_alternatives, 5] = (
+                    self.idle_time_jobs_last_op[id_job] / self.sum_op
+                )
+                self.state[id_job : id_job + self.max_alternatives, 6] = (
+                    self.total_idle_time_jobs[id_job] / self.sum_op
+                )
+
         needed_machines = self.needed_machine_operation[self.legal_actions[:-1]]
         for machine in range(self.machines):
             if machine in needed_machines:
@@ -617,9 +664,10 @@ class FjspEnv(gym.Env):
                     if (
                         self.needed_machine_operation[operation] == machine
                         and not self.legal_actions[operation]
-                        #and not self.illegal_actions[machine][operation]
+                        # and not self.illegal_actions[machine][operation]
                         and self.legal_jobs[id_job]
-                        and self.todo_activity_jobs[id_job] <= self.last_activity_jobs[id_job]
+                        and self.todo_activity_jobs[id_job]
+                        <= self.last_activity_jobs[id_job]
                     ):
                         self.legal_actions[operation] = True
                         if not self.machine_legal[machine]:
@@ -632,7 +680,7 @@ class FjspEnv(gym.Env):
             power_consumption * self.prices[self.current_time_step]
         )
         return hole_planning
-    
+
     def _is_done(self):
         if self.nb_legal_actions == 0:
             self.last_time_step = self.current_time_step

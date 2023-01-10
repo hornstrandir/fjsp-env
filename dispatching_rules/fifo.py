@@ -14,8 +14,8 @@ def FIFO_worker(env_config):
     done = False
     state = env.reset()
     while not done:
-        real_state = np.copy(state['real_obs'])
-        legal_actions = state['action_mask'][:-1]
+        real_state = np.copy(state["real_obs"])
+        legal_actions = state["action_mask"][:-1]
         reshaped = np.reshape(real_state, (env.operations, 9))
         remaining_time = reshaped[:, 5]
         illegal_actions = np.invert(legal_actions)
@@ -28,7 +28,14 @@ def FIFO_worker(env_config):
     total_energy_costs = env.total_energy_costs
     print(env.solution)
     env.reset()
-    wandb.log({"nb_episodes": 1, "make_span": make_span, "total_energy_costs": total_energy_costs})
+    wandb.log(
+        {
+            "nb_episodes": 1,
+            "make_span": make_span,
+            "total_energy_costs": total_energy_costs,
+        }
+    )
+
 
 if __name__ == "__main__":
     FIFO_worker(ENV_CONFIG)
