@@ -2,6 +2,7 @@ from pathlib import Path
 import multiprocessing as mp
 import os
 from utils.CustomCallbacks import CustomCallbacks
+
 ROOT = Path(__file__).parents[1].absolute()
 
 MODEL_CONFIG = {
@@ -10,39 +11,32 @@ MODEL_CONFIG = {
 }
 
 ENV_CONFIG = {
-    "instance_path": "/instances_preprocessed/MK03.fjs",
-    "energy_data_path": ROOT / "data/energy_data/elect_price_2022_kwmin.pkl",
+    "instance_path": ROOT / "data/instances_preprocessed/MK01.fjs",
+    "energy_data_path": ROOT / "data/electric_price/price_MinMax_sept_14_days.npy",
     "power_consumption_machines": {
-        "15": [
-            1,
-            15,
-            6,
-            18,
-            17,
-            7,
-            8,
-            2,
-            8,
-            9,
-            1,
-            5,
-            10,
-            2,
-            3,
-        ],
+        "4": [8, 19, 17, 7],
+        "5": [12, 8, 3, 4, 7],
+        "6": [14, 14, 7, 6, 19, 5],
+        "8": [2, 8, 13, 14, 16, 5, 19, 18],
+        "10": [11, 11, 3, 19, 10, 16, 12, 15, 13, 17],
+        "15": [12, 3, 19, 10, 5, 13, 11, 18, 17, 16, 14, 12, 3, 10, 18],
         "20": [3, 8, 19, 6, 1, 19, 13, 9, 5, 18, 9, 1, 15, 9, 13, 14, 7, 9, 2, 3],
     },
-    "penalty_weight": 0.75,
+    "alpha": 0.75,
+    "loose_noop_restrictions": False,
+    "seed": 2023,
 }
 MODIFIED_CONFIG_PPO = {
-    "env": "FjspEnv-v0", 
+    "env": "FjspEnv-v0",
     "env_config": ENV_CONFIG,
     "num_gpus": int(os.environ.get("RLLIB_NUM_GPUS", "0")),
     "callbacks": CustomCallbacks,
     "model": {
         "custom_model": "fc_masked_model_tf",
         "fcnet_activation": "relu",
-        "fcnet_hiddens": [MODEL_CONFIG['layer_size'] for k in range(MODEL_CONFIG['layer_nb'])],
+        "fcnet_hiddens": [
+            MODEL_CONFIG["layer_size"] for k in range(MODEL_CONFIG["layer_nb"])
+        ],
         "vf_share_layers": False,
     },
     "framework": "tf",
@@ -66,7 +60,7 @@ DEFAULT_CONFIG_PPO = {
     "rollout_fragment_length": 704,
     # Number of timesteps collected for each SGD round. This defines the size
     # of each SGD epoch.
-    "train_batch_size": mp.cpu_count() * 4 * 704, # Default: 4000,
+    "train_batch_size": mp.cpu_count() * 4 * 704,  # Default: 4000,
     # Total SGD batch size across all devices for SGD. This defines the
     # minibatch size within each epoch.
     "sgd_minibatch_size": 128,
@@ -104,10 +98,9 @@ DEFAULT_CONFIG_PPO = {
     "batch_mode": "truncate_episodes",
     # Which observation filter to apply to the observation.
     "observation_filter": "NoFilter",
-
     # Deprecated keys:
     # Share layers for value function. If you set this to True, it's important
     # to tune vf_loss_coeff.
     # Use config.model.vf_share_layers instead.
-    #"vf_share_layers": DEPRECATED_VALUE,
+    # "vf_share_layers": DEPRECATED_VALUE,
 }

@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
-
-DIR_INFILE = Path("fjsp_env/envs/instances").absolute()
-DIR_OUTFILE = Path("fjsp_env/envs/instances_preprocessed").absolute()
+ROOT = Path(__file__).parents[1].absolute()
+DIR_INFILE = ROOT / Path("data/barnes")
+DIR_OUTFILE = ROOT / Path("data/barnes_preprocessed")
 IN_FILES = [file for file in os.listdir(DIR_INFILE) if os.path.isfile(DIR_INFILE / file)]
 
 def get_max_alternatives(splitted_line):

@@ -1,17 +1,17 @@
 import unittest
 import numpy as np
-from fjsp_env.envs.fjsp_env import FJSPEnv
+from fjsp_env.envs.fjsp_env import FjspEnv
+from utils.config import ENV_CONFIG
 
 
 class TestState(unittest.TestCase):
     def test_random(self):
-        env = FJSPEnv(
-            env_config=None,
+        env = FjspEnv(
+            env_config=ENV_CONFIG,
         )
         average = 0
         for _ in range(100):
             state = env.reset()
-            print(env.instance_map.items())
             self.assertEqual(env.current_time_step, 0)
             legal_actions = env.get_legal_actions()
             done = False
@@ -45,9 +45,9 @@ class TestState(unittest.TestCase):
                 )[0]
                 actions_taken.append(actions)
                 self.assertEqual(
-                legal_actions[:-1].sum(),
-                env.nb_legal_actions,
-                f"""
+                    legal_actions[:-1].sum(),
+                    env.nb_legal_actions,
+                    f"""
                 legal_actions {legal_actions[:-1].sum()} and nb legal actions {env.nb_legal_actions} are not coherant, 
                 legal_actions: {env.legal_actions}
                 """,
@@ -56,10 +56,9 @@ class TestState(unittest.TestCase):
                 legal_actions = env.get_legal_actions()
                 total_reward += rewards
 
-
                 self.assertTrue(
-                    max(state["real_obs"].flatten()) <= 1.0, "Out of max bound state"
-                    f"state: {state['real_obs']}"
+                    max(state["real_obs"].flatten()) <= 1.0,
+                    "Out of max bound state" f"state: {state['real_obs']}",
                 )
                 self.assertTrue(
                     min(state["real_obs"].flatten()) >= 0.0, "Out of min bound state"
@@ -85,24 +84,15 @@ class TestState(unittest.TestCase):
                     current activity jobs: {env.todo_activity_jobs},
                     last activity jobs: {env.last_activity_jobs},
                     needed machines operations: {env.needed_machine_operation},
-                    """
+                    """,
                 )
                 assert len(machines_available) == env.nb_machine_legal
-                print(f"solution {env.solution}")
-                #print(f"""
-                #action choosen: {actions}
-                #current time step: {env.current_time_step}
-                #machine legal: {env.machine_legal}
-                #action legal: {env.legal_actions}          
-                
-                #""")
 
             average += env.last_time_step
             self.assertEqual(len(env.next_time_step), 0)
             for job in range(env.jobs):
-                #self.assertEqual((env.solution[job] == -1).sum(), (env.machines - env.last_activity_jobs[job]-1))
                 self.assertEqual(
-                    env.todo_activity_jobs[job], 
+                    env.todo_activity_jobs[job],
                     env.last_activity_jobs[job] + 1,
                     f"""
                     last activity jobs: {env.last_activity_jobs},
@@ -111,10 +101,15 @@ class TestState(unittest.TestCase):
                     actions taken: {actions_taken}
                     time until activity finished: {env.time_until_activity_finished_jobs}
                     time until machine free: {env.time_until_available_machine}
-                    """)
+                    """,
+                )
+            self.assertTrue(
+                env.total_energy_costs,
+            )
+            self.assertIsInstance(
+                env.total_energy_costs, float, f"energy costs: {env.total_energy_costs}"
+            )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
-
-#http://jobshop.jjvh.nl/solution.php?instance_id=84&hash=26721c7d85d9b732adbeb16b14ba354d
-# add energy consumption to the table/ make span 
