@@ -639,18 +639,3 @@ class FjspEnv(gym.Env):
             self.last_solution = self.solution
             return True
         return False
-    
-
-def main():
-    env = FJSPEnv(env_config=None)
-    env.reset()
-    print("i am here")
-    print(env.jobs)
-    print(env.machines)
-    print(env.legal_actions)
-    print(env.needed_machine_operation)
-
-
-
-if __name__ == "__main__":
-    main()

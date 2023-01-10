@@ -12,7 +12,7 @@ from utils.config import ENV_CONFIG, MODIFIED_CONFIG_PPO
 ROOT = Path(__file__).parent.absolute()
 
 if __name__ == "__main__":
-    checkpoint_dir = ROOT / "checkpoints/checkpoint_000008/"
+    checkpoint_dir = ROOT / "checkpoints/skilled-paper-19/checkpoint_000095"
     ray.init()
     register_env("FjspEnv-v0", lambda config: FjspEnv(config))
     ModelCatalog.register_custom_model("fc_masked_model_tf", FCMaskedActionsModelTF)
